@@ -1,0 +1,66 @@
+# ───────────── Dependencies ─────────────
+node_modules/
+**/node_modules/
+
+# ───────────── Environment & secrets ─────────────
+# Never commit real keys (DB password, JWT secret, Razorpay, Google).
+# Commit only the *.env.example templates.
+.env
+.env.*
+!.env.example
+*.local
+
+# Certificates / keys (e.g. Aiven CA certificate)
+*.pem
+*.key
+*.crt
+*.p12
+
+# ───────────── Build output ─────────────
+dist/
+dist-ssr/
+build/
+out/
+.next/
+*.tsbuildinfo
+
+# ───────────── Deployment ─────────────
+.vercel/
+
+# ───────────── Database dumps & one-off scripts ─────────────
+# Migrations in Backend/migrations/*.sql ARE tracked; dumps hold real data.
+dump.sql
+*.dump
+*.backup
+backup*.sql
+restore-dump.js
+
+# ───────────── Logs & coverage ─────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+coverage/
+.nyc_output/
+
+# ───────────── Caches ─────────────
+.cache/
+.eslintcache
+.parcel-cache/
+.vite/
+
+# ───────────── Editors ─────────────
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.sw?
+
+# ───────────── OS files ─────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ───────────── Local tooling ─────────────
+.claude/settings.local.json
