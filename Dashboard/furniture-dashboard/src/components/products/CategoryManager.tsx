@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Pencil, Plus, Trash2, X } from "lucide-react";
+import ConfirmDialog from "../common/ConfirmDialog";
 
 import {
   apiError,
@@ -38,6 +39,7 @@ const CategoryManager = ({ onClose, onChanged, fullPage = false }: CategoryManag
   const [newSubGroup, setNewSubGroup] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
+  const [deleteSubTarget, setDeleteSubTarget] = useState<SubCategory | null>(null);
   const [replacementCategoryId, setReplacementCategoryId] = useState("");
 
   // Which row is being renamed: "c-<id>" or "s-<id>"
@@ -126,6 +128,7 @@ const CategoryManager = ({ onClose, onChanged, fullPage = false }: CategoryManag
       className={fullPage ? "w-full" : "fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"}
       onClick={fullPage ? undefined : onClose}
     >
+      {deleteSubTarget && <ConfirmDialog title="Delete sub-category?" message={`Delete "${deleteSubTarget.name}"?`} onCancel={() => setDeleteSubTarget(null)} onConfirm={() => { const target = deleteSubTarget; setDeleteSubTarget(null); void run(() => deleteSubCategory(target.id), "Failed to delete sub-category"); }} />}
       <div
         role="dialog"
         aria-label={fullPage ? "Categories Master" : "Manage categories"}
@@ -236,11 +239,7 @@ const CategoryManager = ({ onClose, onChanged, fullPage = false }: CategoryManag
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => {
-                                        if (window.confirm(`Delete sub-category "${sub.name}"?`)) {
-                                          void run(() => deleteSubCategory(sub.id), "Failed to delete sub-category");
-                                        }
-                                      }}
+                                      onClick={() => setDeleteSubTarget(sub)}
                                       className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
                                       aria-label="Delete"
                                     >

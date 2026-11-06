@@ -42,7 +42,7 @@
 }
 
 .office-furniture-page .subcategory-hero-clean {
-  background-color: #f4eeea;
+  background-color: var(--site-warm-bg);
 }
 
 .office-furniture-page .office-ab-container,
@@ -124,7 +124,7 @@
 
 /* Subcategory Clean Header (No Clutter) */
 .subcategory-hero-clean {
-  background: #f4eeea;
+  background: var(--site-warm-bg);
   padding: 24px 20px 18px;
   border-bottom: 1px solid #e9ddd5;
 }

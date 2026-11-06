@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { getOrders } from "../services/api";
+import DateRangeCalendar from "../components/common/DateRangeCalendar";
 
 interface ReturnItem {
   product_name?: string;
@@ -54,7 +55,41 @@ const Returns = () => {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const datePickerRef = useRef<HTMLDivElement>(null);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1));
+  const [rangeAnchor, setRangeAnchor] = useState<Date | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<ReturnOrder | null>(null);
+
+  const chooseCalendarDate = (day: Date) => {
+    const selected = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+    const dateValue = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    if (!rangeAnchor || Math.abs(selected.getTime() - rangeAnchor.getTime()) / 86_400_000 >= 62) {
+      setRangeAnchor(selected);
+      setFromDate(dateValue(selected));
+      setToDate(dateValue(selected));
+      return;
+    }
+    const start = selected < rangeAnchor ? selected : rangeAnchor;
+    const end = selected < rangeAnchor ? rangeAnchor : selected;
+    setFromDate(dateValue(start));
+    setToDate(dateValue(end));
+    setRangeAnchor(null);
+  };
+
+  useEffect(() => {
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!datePickerRef.current?.contains(event.target as Node)) setShowDatePicker(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowDatePicker(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -153,7 +188,17 @@ const Returns = () => {
           <select value={productFilter} onChange={(event) => setProductFilter(event.target.value)} className="h-11 min-w-52 border border-gray-200 bg-white px-3 text-sm text-slate-700">{["All Products", ...products].map((product) => <option key={product}>{product}</option>)}</select>
           <div className="relative">
             <button type="button" onClick={() => setShowDatePicker((open) => !open)} className="inline-flex h-11 items-center gap-2 border border-gray-200 bg-white px-4 text-sm text-slate-700 hover:bg-gray-50"><CalendarDays className="h-4 w-4" />{fromDate || toDate ? `${fromDate || "Any"} to ${toDate || "Today"}` : "All dates"}</button>
-            {showDatePicker && <div className="absolute right-0 z-40 mt-2 grid w-64 gap-3 border border-gray-200 bg-white p-4"><label className="grid gap-1 text-xs font-medium text-slate-500">From<input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="h-10 border border-gray-200 px-2 text-sm text-slate-700" /></label><label className="grid gap-1 text-xs font-medium text-slate-500">To<input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="h-10 border border-gray-200 px-2 text-sm text-slate-700" /></label><button type="button" onClick={() => { setFromDate(""); setToDate(""); setShowDatePicker(false); }} className="border-t border-gray-100 pt-2 text-left text-xs font-semibold text-green-700">Clear dates</button></div>}
+            {showDatePicker && <div className="absolute right-0 top-full z-40 mt-2 flex w-[min(94vw,600px)] border border-gray-200 bg-white shadow-xl">
+              <DateRangeCalendar
+                calendarMonth={calendarMonth}
+                dateRange={{ start: fromDate ? new Date(`${fromDate}T00:00:00`) : null, end: toDate ? new Date(`${toDate}T23:59:59.999`) : null }}
+                rangeAnchor={rangeAnchor}
+                onMonthChange={setCalendarMonth}
+                onChooseDate={chooseCalendarDate}
+                onClear={() => { setFromDate(""); setToDate(""); setRangeAnchor(null); setShowDatePicker(false); }}
+                onApply={() => { setRangeAnchor(null); setShowDatePicker(false); }}
+              />
+            </div>}
           </div>
           <button type="button" onClick={exportCsv} disabled={!filtered.length} className="inline-flex h-11 items-center justify-center gap-2 bg-green-700 px-4 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-50"><Download className="h-4 w-4" /> Export CSV</button>
         </section>

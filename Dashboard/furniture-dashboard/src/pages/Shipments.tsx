@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { getShipments, getOrders, updateShipment } from "../services/api";
+import DateTimeCalendarField from "../components/common/DateTimeCalendarField";
 import { normalizeShipmentStage, SHIPMENT_STAGES, shipmentStageLabel, type ShipmentStage } from "../utils/shipmentStatus";
 
 interface Shipment {
@@ -889,62 +890,15 @@ const Shipments = () => {
 
               {/* Shipped At */}
 
-              <div>
-
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Shipped At
-                </label>
-
-                <input
-                  type="datetime-local"
-                  value={editShippedAt}
-                  onChange={(event) =>
-                    setEditShippedAt(event.target.value)
-                  }
-                  className="h-10 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
-                />
-
-              </div>
+              <DateTimeCalendarField label="Shipped At" value={editShippedAt} onChange={setEditShippedAt} />
 
               {/* Estimated Delivery */}
 
-              <div>
-
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Estimated Delivery
-                </label>
-
-                <input
-                  type="datetime-local"
-                  value={editEstimatedDelivery}
-                  onChange={(event) =>
-                    setEditEstimatedDelivery(
-                      event.target.value
-                    )
-                  }
-                  className="h-10 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
-                />
-
-              </div>
+              <DateTimeCalendarField label="Estimated Delivery" value={editEstimatedDelivery} onChange={setEditEstimatedDelivery} />
 
               {/* Delivered At */}
 
-              <div>
-
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Delivered At
-                </label>
-
-                <input
-                  type="datetime-local"
-                  value={editDeliveredAt}
-                  onChange={(event) =>
-                    setEditDeliveredAt(event.target.value)
-                  }
-                  className="h-10 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
-                />
-
-              </div>
+              <DateTimeCalendarField label="Delivered At" value={editDeliveredAt} onChange={setEditDeliveredAt} />
 
               {/* Shipment Information */}
 

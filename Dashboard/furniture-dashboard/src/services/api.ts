@@ -32,8 +32,17 @@ api.interceptors.request.use((config) => {
 }, (error) => Promise.reject(error));
 
 // Server-provided error message, or the fallback.
-export const apiError = (err: unknown, fallback: string): string =>
-  (isAxiosError(err) && err.response?.data?.message) || fallback;
+export const apiError = (err: unknown, fallback: string): string => {
+  if (isAxiosError(err)) {
+    const body = err.response?.data;
+    if (typeof body?.message === "string" && body.message.trim()) return body.message;
+    if (typeof body?.error === "string" && body.error.trim()) return body.error;
+    if (Array.isArray(body?.errors) && body.errors.length) {
+      return body.errors.map((item: unknown) => typeof item === "string" ? item : (item as { message?: string })?.message).filter(Boolean).join(" ") || fallback;
+    }
+  }
+  return err instanceof Error && err.message ? err.message : fallback;
+};
 
 export const TOKEN_KEY = "staff_token";
 
@@ -271,6 +280,7 @@ export interface ProductReview {
   rating: number;
   title: string | null;
   comment: string | null;
+  image_url?: string | null;
   is_verified_purchase: boolean;
   status: "pending" | "approved" | "hidden";
   created_at: string;
@@ -287,6 +297,8 @@ export const createReview = (data: {
   comment?: string;
   status?: string;
   is_verified_purchase?: boolean;
+  image_url?: string | null;
+  created_at?: string;
 }) => api.post("/reviews", data);
 
 export const updateReview = (id: number, data: Partial<ProductReview>) =>

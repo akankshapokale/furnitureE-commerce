@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   Legend,
@@ -17,6 +15,7 @@ import {
 import {
   Download,
   CalendarDays,
+  FileDown,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
@@ -34,6 +33,10 @@ import {
   getPayments,
   getProducts,
 } from "../services/api";
+import DateRangeCalendar, { type CalendarDateRange } from "../components/common/DateRangeCalendar";
+import { getOrderTimestamp } from "../utils/orderDate";
+import { downloadInvoicePdf } from "../utils/invoicePdf";
+import MonthlySalesChart from "../components/dashboard/MonthlySalesChart";
 
 interface OrderItem {
   product_id?: number;
@@ -46,6 +49,16 @@ interface OrderItem {
 interface Order {
   id: number;
   customer_name?: string;
+  customer_email?: string;
+  customer_phone?: string;
+  phone?: string;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  shipping_city?: string | null;
+  shipping_state?: string | null;
+  shipping_postal_code?: string | null;
+  subtotal?: number | string;
+  discount_amount?: number | string;
   total_amount: number | string;
   status: string;
   payment_status: string;
@@ -92,12 +105,7 @@ const dayKey = (date: Date) =>
 const monthKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}`;
 const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 const endOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
-const calendarDays = (month: Date) => {
-  const first = new Date(month.getFullYear(), month.getMonth(), 1);
-  const start = new Date(month.getFullYear(), month.getMonth(), 1 - first.getDay());
-  return Array.from({ length: 42 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
-};
-
+const MAX_CUSTOM_RANGE_DAYS = 62;
 const Sales = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -106,17 +114,21 @@ const Sales = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
-  const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>(() => {
-    const end = endOfDay(new Date());
-    return { start: startOfDay(new Date(end.getFullYear(), end.getMonth(), end.getDate() - 29)), end };
+  const [dateRange, setDateRange] = useState<CalendarDateRange>(() => {
+    const now = new Date();
+    return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: endOfDay(now) };
   });
-  const [activeDatePreset, setActiveDatePreset] = useState("Last 30 Days");
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [activeDatePreset, setActiveDatePreset] = useState("Monthly");
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
+  const [showDateCalendar, setShowDateCalendar] = useState(false);
+  const [showMonthCalendar, setShowMonthCalendar] = useState(false);
   const [rangeAnchor, setRangeAnchor] = useState<Date | null>(null);
+  const [graphPage, setGraphPage] = useState(0);
+  const [trendPage, setTrendPage] = useState(0);
+  const [ordersPage, setOrdersPage] = useState(0);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -156,44 +168,78 @@ const Sales = () => {
     };
   }, [load, refresh]);
 
-  const applyQuickRange = (preset: string) => {
+  const applyQuickRange = (preset: string, selectedMonth = calendarMonth) => {
     const today = new Date();
+    const monthStart = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), 1);
+    const selectedEnd = endOfDay(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0));
+    const end = selectedEnd > endOfDay(today) ? endOfDay(today) : selectedEnd;
     let start: Date | null = null;
-    let end: Date | null = endOfDay(today);
+    let rangeEnd: Date | null = null;
 
-    if (preset === "Today") start = startOfDay(today);
-    if (preset === "This Week") {
-      start = startOfDay(today);
-      start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+    if (preset === "Monthly") {
+      start = monthStart;
+      rangeEnd = end;
+    } else if (preset === "Last 6 Months") {
+      start = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 5, 1);
+      rangeEnd = end;
+    } else if (preset === "Custom Date Range") {
+      start = dateRange.start || startOfDay(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 29));
+      rangeEnd = dateRange.end || endOfDay(today);
     }
-    if (preset === "This Month") start = new Date(today.getFullYear(), today.getMonth(), 1);
-    if (preset === "Last Month") {
-      start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      end = endOfDay(new Date(today.getFullYear(), today.getMonth(), 0));
-    }
-    if (preset === "Last 30 Days") start = startOfDay(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 29));
-    if (preset === "Last 90 Days") start = startOfDay(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 89));
-    if (preset === "Last 12 Months") start = startOfDay(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 364));
-    if (preset === "All Time") end = null;
 
-    setDateRange({ start, end });
+    setDateRange({ start, end: rangeEnd });
     setActiveDatePreset(preset);
     setRangeAnchor(null);
-    setShowDatePicker(false);
+    setShowDateCalendar(false);
+    setShowMonthCalendar(false);
+    setGraphPage(0);
+    setTrendPage(0);
+    setOrdersPage(0);
+  };
+
+  const dateValue = (date: Date | null, end = false) => {
+    if (!date) return "";
+    const value = end ? endOfDay(date) : date;
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
   };
 
   const chooseCalendarDate = (day: Date) => {
     const selected = startOfDay(day);
-    setActiveDatePreset("Custom Range");
     if (!rangeAnchor) {
       setRangeAnchor(selected);
-      setDateRange({ start: selected, end: null });
-      return;
+      setDateRange({ start: selected, end: endOfDay(selected) });
+    } else if (Math.abs(selected.getTime() - rangeAnchor.getTime()) / DAY_MS >= MAX_CUSTOM_RANGE_DAYS) {
+      setRangeAnchor(selected);
+      setDateRange({ start: selected, end: endOfDay(selected) });
+    } else {
+      const start = selected < rangeAnchor ? selected : rangeAnchor;
+      const end = selected < rangeAnchor ? rangeAnchor : selected;
+      setDateRange({ start, end: endOfDay(end) });
+      setRangeAnchor(null);
     }
-    const start = selected < rangeAnchor ? selected : rangeAnchor;
-    const end = selected < rangeAnchor ? rangeAnchor : selected;
-    setDateRange({ start, end: endOfDay(end) });
+    setActiveDatePreset("Custom Date Range");
+    setGraphPage(0);
+    setTrendPage(0);
+    setOrdersPage(0);
+  };
+
+  const clearCalendarRange = () => {
+    setDateRange({ start: null, end: null });
     setRangeAnchor(null);
+    setActiveDatePreset("All Time");
+    setShowDateCalendar(false);
+    setShowMonthCalendar(false);
+    setGraphPage(0);
+    setTrendPage(0);
+    setOrdersPage(0);
+  };
+
+  const moveReportPeriod = (direction: -1 | 1) => {
+    const step = activeDatePreset === "Last 6 Months" ? 6 : 1;
+    const next = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + direction * step, 1);
+    if (next > new Date(new Date().getFullYear(), new Date().getMonth(), 1)) return;
+    setCalendarMonth(next);
+    applyQuickRange(activeDatePreset, next);
   };
 
   const data = useMemo(() => {
@@ -275,9 +321,19 @@ const Sales = () => {
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
 
-    // Monthly: always the last 12 months
-    const months = Array.from({ length: 12 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
+    const recordDates = [
+      ...orders.map((order) => getOrderTimestamp(order.created_at, order.order_number)),
+      ...payments.map((payment) => new Date(payment.payment_date || payment.created_at || "").getTime()),
+    ].filter((timestamp) => Number.isFinite(timestamp) && timestamp > 0);
+    const firstAvailable = recordDates.length ? new Date(recordDates.reduce((earliest, value) => Math.min(earliest, value), Number.POSITIVE_INFINITY)) : now;
+    const monthsStart = dateRange.start
+      ? new Date(dateRange.start.getFullYear(), dateRange.start.getMonth(), 1)
+      : new Date(firstAvailable.getFullYear(), firstAvailable.getMonth(), 1);
+    const monthsEndDate = dateRange.end || now;
+    const monthsEnd = new Date(monthsEndDate.getFullYear(), monthsEndDate.getMonth(), 1);
+    const monthCount = Math.max(1, (monthsEnd.getFullYear() - monthsStart.getFullYear()) * 12 + monthsEnd.getMonth() - monthsStart.getMonth() + 1);
+    const months = Array.from({ length: monthCount }, (_, i) => {
+      const d = new Date(monthsStart.getFullYear(), monthsStart.getMonth() + i, 1);
       return {
         key: monthKey(d),
         month: d.toLocaleDateString("en-IN", { month: "short", year: "2-digit" }),
@@ -287,20 +343,21 @@ const Sales = () => {
       };
     });
 
-    orders.filter(isSale).forEach((order) => {
-      const row = months.find(
-        (m) => m.key === monthKey(new Date(order.created_at))
-      );
+    sales.forEach((order) => {
+      const timestamp = getOrderTimestamp(order.created_at, order.order_number);
+      const row = months.find((m) => m.key === monthKey(new Date(timestamp)));
       if (row) {
         row.sales += Number(order.total_amount || 0);
         row.orders += 1;
       }
     });
 
-    payments.filter(isPaid).forEach((payment) => {
+    payments.filter((payment) => isPaid(payment) && inRange(payment.payment_date || payment.created_at)).forEach((payment) => {
       const raw = payment.payment_date || payment.created_at;
       if (!raw) return;
-      const row = months.find((m) => m.key === monthKey(new Date(raw)));
+      const date = new Date(raw);
+      if (!Number.isFinite(date.getTime())) return;
+      const row = months.find((m) => m.key === monthKey(date));
       if (row) row.collected += Number(payment.amount || 0);
     });
 
@@ -377,6 +434,13 @@ const Sales = () => {
         .slice(0, 5),
     };
   }, [orders, payments, products, categories, dateRange]);
+
+  const graphPageCount = Math.max(1, Math.ceil(data.months.length / 6));
+  const visibleMonths = data.months.slice(graphPage * 6, graphPage * 6 + 6);
+  const trendPageCount = Math.max(1, Math.ceil(data.daily.length / 14));
+  const visibleDaily = data.daily.slice(trendPage * 14, trendPage * 14 + 14);
+  const ordersPageCount = Math.max(1, Math.ceil(data.reportOrders.length / 10));
+  const visibleOrders = data.reportOrders.slice(ordersPage * 10, ordersPage * 10 + 10);
 
   const exportCsv = () => {
     const rows = [
@@ -458,48 +522,48 @@ const Sales = () => {
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <div className="relative">
-              <button type="button" onClick={() => setShowDatePicker((open) => !open)} aria-expanded={showDatePicker} className="inline-flex h-11 items-center gap-2 border border-green-200 bg-green-50 px-4 text-sm text-green-800 hover:bg-green-100">
-                <CalendarDays className="h-4 w-4" /> {activeDatePreset}
+            <select value={activeDatePreset} onChange={(event) => applyQuickRange(event.target.value)} aria-label="Sales date filter" className="h-11 border border-gray-200 bg-white px-3 text-sm text-slate-700">
+              {["Monthly", "Last 6 Months", "Custom Date Range", "All Time"].map((option) => <option key={option}>{option}</option>)}
+            </select>
+            {(activeDatePreset === "Monthly" || activeDatePreset === "Last 6 Months") && <div className="flex h-11 items-center gap-1 border border-gray-200 px-1">
+              <button type="button" aria-label="Previous report period" onClick={() => moveReportPeriod(-1)} className="flex h-8 w-8 items-center justify-center text-slate-600 hover:bg-gray-100"><ChevronLeft size={16} /></button>
+              <div className="relative">
+                <button type="button" aria-expanded={showMonthCalendar} onClick={() => setShowMonthCalendar((open) => !open)} className="inline-flex h-9 items-center gap-2 px-1 text-sm text-slate-700">
+                  <CalendarDays size={15} className="text-slate-500" />
+                  {calendarMonth.toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
+                </button>
+                {showMonthCalendar && <div className="absolute right-0 top-full z-50 mt-2 flex w-[min(94vw,600px)] border border-gray-200 bg-white shadow-xl">
+                  <DateRangeCalendar
+                    calendarMonth={calendarMonth}
+                    dateRange={{ start: calendarMonth, end: calendarMonth }}
+                    rangeAnchor={null}
+                    selectionMode="single"
+                    onMonthChange={setCalendarMonth}
+                    onChooseDate={(date) => { const selectedMonth = new Date(date.getFullYear(), date.getMonth(), 1); setCalendarMonth(selectedMonth); applyQuickRange(activeDatePreset, selectedMonth); setShowMonthCalendar(false); }}
+                    onClear={clearCalendarRange}
+                    onApply={() => { applyQuickRange(activeDatePreset, calendarMonth); setShowMonthCalendar(false); }}
+                  />
+                </div>}
+              </div>
+              <button type="button" aria-label="Next report period" disabled={calendarMonth.getFullYear() === new Date().getFullYear() && calendarMonth.getMonth() === new Date().getMonth()} onClick={() => moveReportPeriod(1)} className="flex h-8 w-8 items-center justify-center text-slate-600 hover:bg-gray-100 disabled:opacity-40"><ChevronRight size={16} /></button>
+            </div>}
+            {activeDatePreset === "Custom Date Range" && <div className="relative">
+              <button type="button" aria-expanded={showDateCalendar} onClick={() => setShowDateCalendar((open) => !open)} className="inline-flex h-11 max-w-[min(90vw,22rem)] items-center gap-2 border border-gray-200 bg-white px-3 text-sm text-slate-700 hover:bg-gray-50">
+                <CalendarDays size={15} className="shrink-0 text-slate-500" />
+                <span className="truncate">{dateRange.start ? `${dateValue(dateRange.start)}${dateRange.end && dateValue(dateRange.end, true) !== dateValue(dateRange.start) ? ` – ${dateValue(dateRange.end, true)}` : ""}` : "Select dates"}</span>
               </button>
-              {showDatePicker && (
-                <div className="absolute right-0 top-full z-50 mt-2 flex w-[min(94vw,560px)] flex-col border border-gray-200 bg-white sm:flex-row">
-                  <aside className="w-full shrink-0 border-b border-gray-200 p-3 sm:w-36 sm:border-b-0 sm:border-r">
-                    <p className="mb-2 px-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Quick Ranges</p>
-                    {["Today", "This Week", "This Month", "Last Month", "Last 30 Days", "Last 90 Days", "Last 12 Months", "All Time"].map((preset) => (
-                      <button key={preset} type="button" onClick={() => applyQuickRange(preset)} className={`mb-1 w-full px-2.5 py-2 text-left text-sm ${activeDatePreset === preset ? "bg-green-50 font-semibold text-green-800" : "text-slate-600 hover:bg-gray-50"}`}>
-                        {preset}
-                      </button>
-                    ))}
-                  </aside>
-                  <div className="min-w-0 flex-1 p-3 sm:p-4">
-                    <div className="mb-3 flex items-center justify-between">
-                      <button type="button" aria-label="Previous month" onClick={() => setCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="flex h-9 w-9 items-center justify-center border border-gray-200 text-slate-600 hover:bg-gray-50"><ChevronLeft className="h-4 w-4" /></button>
-                      <span className="text-sm font-semibold text-slate-800">{calendarMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span>
-                      <button type="button" aria-label="Next month" onClick={() => setCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="flex h-9 w-9 items-center justify-center border border-gray-200 text-slate-600 hover:bg-gray-50"><ChevronRight className="h-4 w-4" /></button>
-                    </div>
-                    <div className="mb-1 grid grid-cols-7 text-center text-xs font-medium text-slate-400">
-                      {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => <span key={day} className="py-2">{day}</span>)}
-                    </div>
-                    <div className="grid grid-cols-7 gap-y-1">
-                      {calendarDays(calendarMonth).map((day) => {
-                        const dayTime = startOfDay(day).getTime();
-                        const rangeStart = dateRange.start?.getTime();
-                        const rangeEnd = dateRange.end ? startOfDay(dateRange.end).getTime() : rangeStart;
-                        const inRange = rangeStart != null && rangeEnd != null && dayTime >= Math.min(rangeStart, rangeEnd) && dayTime <= Math.max(rangeStart, rangeEnd);
-                        const isBoundary = dayTime === rangeStart || dayTime === rangeEnd;
-                        const disabled = dayTime > startOfDay(new Date()).getTime();
-                        return <button key={day.toISOString()} type="button" disabled={disabled} onClick={() => chooseCalendarDate(day)} className={`h-9 text-sm ${day.getMonth() !== calendarMonth.getMonth() ? "text-slate-300" : "text-slate-700"} ${inRange ? "bg-green-50" : ""} ${isBoundary ? "bg-green-700 font-semibold text-white" : "hover:bg-gray-100"} disabled:cursor-not-allowed disabled:opacity-40`}>{day.getDate()}</button>;
-                      })}
-                    </div>
-                    <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3">
-                      <p className="text-xs text-slate-500">Select a start date, then an end date.</p>
-                      <button type="button" onClick={() => { setRangeAnchor(null); setShowDatePicker(false); }} className="border border-green-700 bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800">Apply</button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+              {showDateCalendar && <div className="absolute right-0 top-full z-50 mt-2 flex w-[min(94vw,600px)] border border-gray-200 bg-white shadow-xl">
+                <DateRangeCalendar
+                  calendarMonth={calendarMonth}
+                  dateRange={dateRange}
+                  rangeAnchor={rangeAnchor}
+                  onMonthChange={setCalendarMonth}
+                  onChooseDate={chooseCalendarDate}
+                  onClear={clearCalendarRange}
+                  onApply={() => { setRangeAnchor(null); setShowDateCalendar(false); }}
+                />
+              </div>}
+            </div>}
             <button type="button" onClick={refresh} disabled={refreshing} className="inline-flex h-11 items-center justify-center gap-2 border border-gray-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-gray-50 disabled:opacity-60">
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
             </button>
@@ -543,23 +607,11 @@ const Sales = () => {
 
             {/* Monthly revenue */}
             <section className={card}>
-              <h2 className="text-lg font-bold text-slate-900">Monthly Revenue</h2>
-              <p className="mt-1 text-xs text-slate-500">
-                Sales (order value) vs revenue collected, last 12 months
-              </p>
-              <div className="mt-4 h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.months} margin={{ top: 10, right: 8, left: -5, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#e5e7eb" />
-                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                    <YAxis axisLine={false} tickLine={false} width={50} tick={{ fill: "#94a3b8", fontSize: 11 }} tickFormatter={compact} />
-                    <Tooltip formatter={tooltipMoney} />
-                    <Legend />
-                    <Bar dataKey="sales" name="Sales" fill="#16a34a" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="collected" name="Collected" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div><h2 className="text-lg font-bold text-slate-900">Monthly Revenue</h2><p className="mt-1 text-xs text-slate-500">Sales and collected revenue by month</p></div>
+                <div className="flex items-center gap-2"><button type="button" disabled={graphPage <= 0} onClick={() => setGraphPage((page) => Math.max(0, page - 1))} className="border border-gray-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-gray-50 disabled:opacity-40">Previous</button><span className="text-xs text-slate-500">{graphPage + 1} / {graphPageCount}</span><button type="button" disabled={graphPage + 1 >= graphPageCount} onClick={() => setGraphPage((page) => Math.min(graphPageCount - 1, page + 1))} className="border border-gray-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-gray-50 disabled:opacity-40">Next</button></div>
               </div>
+              <MonthlySalesChart data={visibleMonths} />
 
               <div className="mt-4 w-full overflow-x-auto">
                 <table className="w-full min-w-[480px] text-sm">
@@ -572,7 +624,7 @@ const Sales = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {[...data.months].reverse().map((m) => (
+                    {[...visibleMonths].reverse().map((m) => (
                       <tr key={m.key} className="border-b border-gray-50 last:border-0">
                         <td className="py-2 text-slate-700">{m.month}</td>
                         <td className="py-2 text-right text-slate-600">{m.orders}</td>
@@ -587,11 +639,10 @@ const Sales = () => {
 
             {/* Daily trend */}
             <section className={card}>
-              <h2 className="text-lg font-bold text-slate-900">Sales Trend</h2>
-              <p className="mt-1 text-xs text-slate-500">Daily sales in the selected period</p>
+              <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-bold text-slate-900">Sales Trend</h2><p className="mt-1 text-xs text-slate-500">Daily sales in the selected period</p></div><div className="flex items-center gap-2"><button type="button" disabled={trendPage <= 0} onClick={() => setTrendPage((page) => Math.max(0, page - 1))} className="border border-gray-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-gray-50 disabled:opacity-40">Previous</button><span className="text-xs text-slate-500">{trendPage + 1} / {trendPageCount}</span><button type="button" disabled={trendPage + 1 >= trendPageCount} onClick={() => setTrendPage((page) => Math.min(trendPageCount - 1, page + 1))} className="border border-gray-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-gray-50 disabled:opacity-40">Next</button></div></div>
               <div className="mt-4 h-[240px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={data.daily} margin={{ top: 10, right: 8, left: -5, bottom: 0 }}>
+                  <LineChart data={visibleDaily} margin={{ top: 10, right: 8, left: -5, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#e5e7eb" />
                     <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 10 }} minTickGap={24} />
                     <YAxis axisLine={false} tickLine={false} width={50} tick={{ fill: "#94a3b8", fontSize: 11 }} tickFormatter={compact} />
@@ -600,6 +651,18 @@ const Sales = () => {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
+            </section>
+
+            <section className={card}>
+              <h2 className="text-lg font-bold text-slate-900">Orders and Invoices</h2>
+              <p className="mt-1 text-xs text-slate-500">Orders in the selected date range. Invoice PDFs use the order and customer details returned by the API.</p>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[680px] text-sm">
+                  <thead><tr className="border-b border-gray-100 text-left text-[10px] uppercase tracking-wide text-slate-400"><th className="py-2">Order ID</th><th className="py-2">Customer</th><th className="py-2">Date</th><th className="py-2">Payment</th><th className="py-2 text-right">Total</th><th className="py-2 text-right">Invoice</th></tr></thead>
+                  <tbody>{visibleOrders.map((order) => <tr key={order.id} className="border-b border-gray-50 last:border-0"><td className="py-2.5 font-medium text-slate-800">{order.order_number || `ORD-${order.id}`}</td><td className="py-2.5 text-slate-600">{order.customer_name || "Guest"}</td><td className="py-2.5 text-slate-600">{new Date(order.created_at).toLocaleDateString("en-IN")}</td><td className="py-2.5 capitalize text-slate-600">{order.payment_status || "Pending"}</td><td className="py-2.5 text-right font-semibold text-slate-800">{inr(Number(order.total_amount || 0))}</td><td className="py-2.5 text-right"><button type="button" onClick={() => downloadInvoicePdf(order)} className="inline-flex items-center gap-1.5 border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-gray-50"><FileDown size={14} /> PDF</button></td></tr>)}{visibleOrders.length === 0 && <tr><td colSpan={6} className="py-8 text-center text-sm text-slate-400">No orders in this period</td></tr>}</tbody>
+                </table>
+              </div>
+              {ordersPageCount > 1 && <div className="mt-3 flex items-center justify-end gap-2"><button type="button" disabled={ordersPage <= 0} onClick={() => setOrdersPage((page) => Math.max(0, page - 1))} className="border border-gray-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-gray-50 disabled:opacity-40">Previous</button><span className="text-xs text-slate-500">{ordersPage + 1} / {ordersPageCount}</span><button type="button" disabled={ordersPage + 1 >= ordersPageCount} onClick={() => setOrdersPage((page) => Math.min(ordersPageCount - 1, page + 1))} className="border border-gray-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-gray-50 disabled:opacity-40">Next</button></div>}
             </section>
 
             {/* Products */}

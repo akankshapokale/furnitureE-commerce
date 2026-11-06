@@ -1,6 +1,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { API_BASE_URL, TOKEN_KEY } from "../services/api";
+import DateRangeCalendar from "../components/common/DateRangeCalendar";
 import {
   Tag,
   Plus,
@@ -84,6 +85,9 @@ const OffersPromotions = () => {
   const [form, setForm] = useState<OfferForm>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [dateCalendarOpen, setDateCalendarOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [rangeAnchor, setRangeAnchor] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState<number | null>(null);
@@ -131,6 +135,8 @@ const OffersPromotions = () => {
     setForm({ ...emptyForm });
     setEditingId(null);
     setFormOpen(true);
+    setDateCalendarOpen(false);
+    setRangeAnchor(null);
     setMessage("");
     setError("");
   };
@@ -149,8 +155,24 @@ const OffersPromotions = () => {
 
     setEditingId(offer.id);
     setFormOpen(true);
+    setDateCalendarOpen(false);
+    setRangeAnchor(null);
     setMessage("");
     setError("");
+  };
+
+  const chooseOfferDate = (day: Date) => {
+    const selected = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+    const dateValue = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    if (!rangeAnchor) {
+      setRangeAnchor(selected);
+      setForm((current) => ({ ...current, start_date: dateValue(selected), end_date: dateValue(selected) }));
+      return;
+    }
+    const start = selected < rangeAnchor ? selected : rangeAnchor;
+    const end = selected < rangeAnchor ? rangeAnchor : selected;
+    setForm((current) => ({ ...current, start_date: dateValue(start), end_date: dateValue(end) }));
+    setRangeAnchor(null);
   };
 
   const saveOffer = async (event: FormEvent<HTMLFormElement>) => {
@@ -466,34 +488,32 @@ const OffersPromotions = () => {
                 </div>
               </label>
 
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-gray-700">
-                  Start Date
-                </span>
-                <input
-                  type="date"
-                  value={form.start_date}
-                  onChange={(event) =>
-                    updateField("start_date", event.target.value)
+              <div className="relative md:col-span-2">
+                <p className="mb-2 block text-sm font-medium text-gray-700">Offer Dates</p>
+                <div className="mb-3 grid gap-3 sm:grid-cols-2">
+                  <p className="border border-gray-200 bg-white px-3 py-2.5 text-sm text-slate-700"><span className="mr-2 text-xs text-slate-400">Start</span>{form.start_date || "No start date"}</p>
+                  <p className="border border-gray-200 bg-white px-3 py-2.5 text-sm text-slate-700"><span className="mr-2 text-xs text-slate-400">End</span>{form.end_date || "No end date"}</p>
+                </div>
+                <button type="button" aria-expanded={dateCalendarOpen} onClick={() => {
+                  if (!dateCalendarOpen) {
+                    const start = form.start_date ? new Date(`${form.start_date}T00:00:00`) : new Date();
+                    setCalendarMonth(new Date(start.getFullYear(), start.getMonth(), 1));
                   }
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-green-600 focus:ring-2 focus:ring-green-100"
-                />
-              </label>
-
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-gray-700">
-                  End Date
-                </span>
-                <input
-                  type="date"
-                  min={form.start_date || undefined}
-                  value={form.end_date}
-                  onChange={(event) =>
-                    updateField("end_date", event.target.value)
-                  }
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-green-600 focus:ring-2 focus:ring-green-100"
-                />
-              </label>
+                  setDateCalendarOpen((open) => !open);
+                }} className="inline-flex h-10 items-center gap-2 border border-gray-300 bg-white px-3 text-sm text-slate-700 hover:bg-gray-50"><CalendarDays className="h-4 w-4" />Choose dates</button>
+                {dateCalendarOpen && <div className="absolute left-0 top-full z-50 mt-2 flex w-[min(94vw,600px)] border border-gray-200 bg-white shadow-xl">
+                  <DateRangeCalendar
+                    calendarMonth={calendarMonth}
+                    dateRange={{ start: form.start_date ? new Date(`${form.start_date}T00:00:00`) : null, end: form.end_date ? new Date(`${form.end_date}T23:59:59.999`) : null }}
+                    rangeAnchor={rangeAnchor}
+                    onMonthChange={setCalendarMonth}
+                    onChooseDate={chooseOfferDate}
+                    disableFutureDates={false}
+                    onClear={() => { updateField("start_date", ""); updateField("end_date", ""); setRangeAnchor(null); setDateCalendarOpen(false); }}
+                    onApply={() => { setRangeAnchor(null); setDateCalendarOpen(false); }}
+                  />
+                </div>}
+              </div>
 
               <label className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 md:col-span-2">
                 <input

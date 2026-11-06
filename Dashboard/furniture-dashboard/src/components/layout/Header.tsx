@@ -1,12 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { Bell, Search, LogOut, ChevronDown, ArrowLeft } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { LogOut, ChevronDown } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
 const Header = () => {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
@@ -56,18 +53,6 @@ const Header = () => {
       <div className="flex h-full items-center justify-between gap-3">
         {/* Left */}
         <div className="flex min-w-0 items-center gap-3">
-          {location.pathname !== "/" && (
-            <button
-              type="button"
-              onClick={() => navigate("/")}
-              aria-label="Back to Dashboard"
-              title="Back to Dashboard"
-              className="flex h-9 shrink-0 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span className="hidden sm:inline">Dashboard</span>
-            </button>
-          )}
           <div className="min-w-0">
           <h1 className="truncate text-base font-semibold text-[#10243e] sm:text-[19px]">
             Operations Command Center
@@ -81,35 +66,6 @@ const Header = () => {
 
         {/* Right */}
         <div className="flex shrink-0 items-center gap-1 sm:gap-3">
-          {/* Desktop Search */}
-          <div className="hidden items-center rounded-lg border border-gray-200 bg-gray-50 px-3 md:flex">
-            <Search className="h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search..."
-              className="h-9 w-40 bg-transparent px-2 text-sm text-gray-700 outline-none placeholder:text-gray-400 lg:w-52"
-            />
-          </div>
-
-          {/* Mobile Search */}
-          <button
-            type="button"
-            aria-label="Search"
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 md:hidden"
-          >
-            <Search className="h-[18px] w-[18px]" />
-          </button>
-
-          {/* Notifications */}
-          <button
-            type="button"
-            aria-label="Notifications"
-            className="relative flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100"
-          >
-            <Bell className="h-[18px] w-[18px]" />
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
-          </button>
-
           <div className="hidden h-8 w-px bg-gray-200 sm:block" />
 
           {/* Profile Dropdown */}

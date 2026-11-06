@@ -37,7 +37,7 @@ export const getHeroBanners = async (_req: Request, res: Response) => {
   try {
     res.set({ "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate", Pragma: "no-cache", Expires: "0" });
     const result = await pool.query(
-      `SELECT * FROM hero_banners WHERE is_active = true ORDER BY id ASC`
+      `SELECT * FROM hero_banners WHERE is_active = true ORDER BY display_order ASC, id ASC`
     );
 
     return res.status(200).json({
@@ -55,7 +55,7 @@ export const getHeroBanners = async (_req: Request, res: Response) => {
 
 export const getHeroBannersForAdmin = async (_req: Request, res: Response) => {
   try {
-    const result = await pool.query(`SELECT * FROM hero_banners ORDER BY id ASC`);
+    const result = await pool.query(`SELECT * FROM hero_banners ORDER BY display_order ASC, id ASC`);
     res.status(200).json({ success: true, data: result.rows });
   } catch (error) {
     console.error("Get hero banners for admin error:", error);
@@ -71,8 +71,8 @@ export const addHeroBanner = async (req: Request, res: Response) => {
 
     const result = await pool.query(
       `INSERT INTO hero_banners 
-        (eyebrow, title, description, image_url, button_text, button_link, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+        (eyebrow, title, description, image_url, button_text, button_link, is_active, display_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, (SELECT COALESCE(MAX(display_order), 0) + 1 FROM hero_banners))
        RETURNING *`,
       [
         eyebrow || "NEW COLLECTION", title, description || "", image_url,
@@ -123,6 +123,17 @@ export const deleteHeroBanner = async (req: Request, res: Response) => {
     const { id } = req.params;
     const result = await pool.query(`DELETE FROM hero_banners WHERE id = $1 RETURNING id`, [id]);
     if (!result.rowCount) return res.status(404).json({ success: false, message: "Hero banner not found" });
+
+    await pool.query(`
+      WITH ordered AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY display_order ASC, id ASC) AS next_order
+        FROM hero_banners
+      )
+      UPDATE hero_banners AS banners
+      SET display_order = ordered.next_order
+      FROM ordered
+      WHERE banners.id = ordered.id
+    `);
 
     return res.status(200).json({
       success: true,

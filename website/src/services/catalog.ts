@@ -108,6 +108,7 @@ export interface Review {
   rating: number;
   title: string | null;
   comment: string | null;
+  image_url?: string | null;
   is_verified_purchase: boolean;
   created_at: string;
 }

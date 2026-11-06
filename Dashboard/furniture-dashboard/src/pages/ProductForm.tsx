@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowDown,
   ArrowLeft,
@@ -33,6 +33,7 @@ import {
   type SubCategory,
 } from "../services/api";
 import ReviewsManager from "../components/products/ReviewsManager";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 import { discountPercent, formatINR, slugify, stockState } from "../components/products/helpers";
 
 interface ImageRow {
@@ -125,18 +126,18 @@ const formatAttributes = (attributes: Record<string, string> | null | undefined)
     .join(", ");
 
 const field =
-  "w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors focus:border-green-500 focus:ring-2 focus:ring-green-100";
+  "w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-green-500 focus:ring-2 focus:ring-green-100";
 
 const Card = ({ title, hint, id, tab, activeTab, drawer, children }: { title: string; hint?: string; id?: string; tab?: string; activeTab?: string; drawer?: boolean; children: ReactNode }) => (
-  <section id={id} hidden={drawer && tab !== activeTab} className="scroll-mt-32 border border-gray-200 bg-white p-4 sm:p-5">
-    <h2 className="text-base font-bold text-slate-900">{title}</h2>
-    {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
-    <div className="mt-5 space-y-4">{children}</div>
+  <section id={id} hidden={drawer && tab !== activeTab} className="scroll-mt-32 border-b border-gray-200 py-4 first:pt-0 last:border-b-0 sm:py-5">
+    <h2 className="text-sm font-bold text-slate-900">{title}</h2>
+    {hint && <p className="mt-1 text-xs leading-5 text-slate-500">{hint}</p>}
+    <div className="mt-4 space-y-3.5">{children}</div>
   </section>
 );
 
 const Label = ({ children, htmlFor, optional }: { children: ReactNode; htmlFor?: string; optional?: boolean }) => (
-  <label htmlFor={htmlFor} className="mb-1.5 block text-xs font-semibold text-slate-600">
+  <label htmlFor={htmlFor} className="mb-1 block text-xs font-semibold text-slate-600">
     {children}
     {optional && <span className="ml-1 font-normal text-slate-400">(optional)</span>}
   </label>
@@ -154,7 +155,6 @@ const EDIT_TABS = [
 const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
   const { id } = useParams();
   const isNew = !id || id === "new";
-  const location = useLocation();
   const navigate = useNavigate();
 
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -167,8 +167,13 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const saveLock = useRef(false);
+  const [ratingError, setRatingError] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [activeTab, setActiveTab] = useState<(typeof EDIT_TABS)[number]["id"]>("basic-information");
   const [imageUrl, setImageUrl] = useState("");
+  const [hoverImageUrl, setHoverImageUrl] = useState("");
+  const [uploadTarget, setUploadTarget] = useState<"primary" | "hover">("primary");
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dimensionImageInputRef = useRef<HTMLInputElement>(null);
@@ -211,7 +216,7 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
         const loaded: FormState = {
           name: p.name,
           slug: p.slug,
-          short_description: p.short_description ?? "",
+          short_description: p.short_description ?? p.description ?? "",
           description: p.description ?? "",
           category_id: String(p.category_id),
           sub_category_id: p.sub_category_id ? String(p.sub_category_id) : "",
@@ -245,6 +250,9 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
           related_product_ids: p.related_product_ids || [],
         };
 
+        const loadedPrimary = loaded.images.find((image) => image.is_primary) ?? loaded.images[0];
+        const loadedHover = loaded.images.find((image) => image !== loadedPrimary && !/dimension|measurement|size\s*chart/i.test(image.alt_text));
+        setHoverImageUrl(loadedHover?.image_url ?? "");
         setForm(loaded);
         setSaved(loaded);
       } catch (err) {
@@ -362,12 +370,16 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
       const image = {
         image_url: data.url,
         alt_text: isDimensionsImage ? "Product Dimensions" : form.name || file.name,
-        is_primary: !isDimensionsImage && form.images.length === 0,
+        is_primary: !isDimensionsImage && (uploadTarget === "primary" || form.images.length === 0),
       };
       const existingDimensionsIndex = form.images.findIndex((item) => /dimension|measurement|size\s*chart/i.test(item.alt_text));
-      set("images", isDimensionsImage && existingDimensionsIndex >= 0
+      const uploadedImages = isDimensionsImage && existingDimensionsIndex >= 0
         ? form.images.map((item, index) => index === existingDimensionsIndex ? image : item)
-        : [...form.images, image]);
+        : [...form.images, image];
+      set("images", uploadTarget === "primary" && !isDimensionsImage
+        ? uploadedImages.map((item) => ({ ...item, is_primary: item.image_url === data.url }))
+        : uploadedImages);
+      if (uploadTarget === "hover" && !isDimensionsImage) setHoverImageUrl(data.url);
       setNotice("Image uploaded successfully");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Image upload failed");
@@ -381,6 +393,11 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
 
   const makePrimary = (index: number) =>
     set("images", form.images.map((image, i) => ({ ...image, is_primary: i === index })));
+
+  const chooseHoverImage = (url: string) => {
+    setHoverImageUrl(url);
+    setNotice("");
+  };
 
   const removeImage = (index: number) => {
     const next = form.images.filter((_, i) => i !== index);
@@ -438,6 +455,15 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
     if (selling !== null && (Number.isNaN(selling) || selling < 0)) return "Selling price is not valid";
     if (selling !== null && selling > price) return "Selling price cannot be higher than the regular price";
 
+    if (form.catalog_rating !== "") {
+      const rating = Number(form.catalog_rating);
+      if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+        setRatingError("Enter a rating from 1 to 5.");
+        return "Please correct the rating value.";
+      }
+    }
+    setRatingError("");
+
     const stock = Number(form.stock_quantity);
     if (!Number.isInteger(stock) || stock < 0) return "Stock must be a whole number, 0 or more";
 
@@ -449,9 +475,11 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
   };
 
   const save = async () => {
+    if (saveLock.current) return;
     const problem = validate();
     if (problem) {
       setError(problem);
+      setNotice("");
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
@@ -488,12 +516,18 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
     };
 
     try {
+      saveLock.current = true;
       setSaving(true);
       setError("");
+      setNotice("");
 
       if (isNew) {
         const { data } = await createProduct(payload);
-        navigate(`/products/${data.data.id}`, { replace: true, state: location.state });
+        const createdId = data?.data?.id;
+        if (data?.success === false || createdId === undefined || createdId === null || createdId === "") {
+          throw new Error(data?.message || "Product was not created. The server did not confirm the new product.");
+        }
+        navigate("/products", { replace: true, state: { notice: "Product created successfully" } });
       } else {
         await updateProduct(id!, payload);
         setSaved(form);
@@ -501,15 +535,15 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
       }
     } catch (err) {
       setError(apiError(err, "Failed to save product"));
+      setNotice("");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   };
 
   const remove = async () => {
-    if (!window.confirm(`Delete "${form.name}"? Products linked to existing records will be archived to preserve those records.`)) return;
-
     try {
       const response = await deleteProduct(Number(id));
       navigate("/products", { replace: true, state: { notice: response.data.message } });
@@ -547,10 +581,11 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
 
   return (
     <div className={drawer ? "fixed inset-0 z-[100] flex justify-end" : "min-h-screen min-w-0 bg-white"}>
+      {confirmDelete && <ConfirmDialog title="Delete product?" message={`Delete "${form.name}"? Products linked to existing records will be archived to preserve those records.`} onCancel={() => setConfirmDelete(false)} onConfirm={() => { setConfirmDelete(false); void remove(); }} />}
       {drawer && <button type="button" aria-label="Close product editor" onClick={back} className="absolute inset-0 bg-slate-900/30" />}
       <div className={drawer ? "relative flex h-full w-full max-w-[620px] flex-col bg-white shadow-2xl" : "min-h-screen min-w-0"}>
       <div className={drawer ? "min-h-0 flex-1 overflow-y-auto" : "min-w-0"}>
-      <div className="min-w-0 space-y-5 p-4 sm:p-6 lg:p-8">
+      <div className="min-w-0 space-y-4 p-4 sm:p-5 lg:p-6">
 
         {/* Header */}
         <div className={drawer ? "sticky top-0 z-20 -mx-4 -mt-4 border-b border-gray-200 bg-white px-4 pt-4 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6" : ""}>
@@ -572,7 +607,7 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
             {!isNew && (
               <button
                 type="button"
-                onClick={remove}
+                onClick={() => setConfirmDelete(true)}
                 className="inline-flex items-center gap-2 self-start rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
               >
                 <Trash2 size={15} /> Delete
@@ -594,16 +629,16 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
 
         {notice && <div className="rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{notice}</div>}
         {error && (
-          <div className="flex items-start justify-between gap-3 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div role="alert" aria-live="assertive" className="fixed right-4 top-4 z-[220] flex max-w-[min(92vw,28rem)] items-start justify-between gap-3 rounded-lg border border-red-200 bg-white px-4 py-3 text-sm text-red-700 shadow-lg">
             <span>{error}</span>
             <button type="button" onClick={() => setError("")} aria-label="Dismiss"><X size={16} /></button>
           </div>
         )}
 
-        <div className={`grid min-w-0 grid-cols-1 gap-4 ${drawer ? "" : "xl:grid-cols-[minmax(0,1fr)_340px]"}`}>
+        <div className={`grid min-w-0 grid-cols-1 gap-5 ${drawer ? "" : "xl:grid-cols-[minmax(0,1fr)_300px]"}`}>
 
           {/* ---------- Main column ---------- */}
-          <div className="min-w-0 space-y-4">
+          <div className="min-w-0 space-y-2">
 
             <Card id="basic-information" tab="basic-information" activeTab={activeTab} drawer={drawer} title="Basic information">
               <div>
@@ -612,19 +647,15 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
               </div>
 
               <div>
-                <Label htmlFor="short" optional>Short description</Label>
-                <input id="short" value={form.short_description} onChange={(e) => set("short_description", e.target.value)} maxLength={160} className={field} placeholder="One line shown in product cards" />
+                <Label htmlFor="short" optional>Description</Label>
+                <textarea id="short" rows={8} value={form.description} onChange={(e) => set("description", e.target.value)} className={`${field} min-h-52 resize-y leading-6`} placeholder="Describe the product in detail (optional)" />
               </div>
 
               <div>
-                <Label htmlFor="badge" optional>Website badge</Label>
+                <Label htmlFor="badge" optional>Product Badge</Label>
                 <input id="badge" value={form.badge} onChange={(e) => set("badge", e.target.value)} maxLength={80} className={field} placeholder="e.g. Bestseller" />
               </div>
 
-              <div>
-                <Label htmlFor="description" optional>Full description</Label>
-                <textarea id="description" rows={6} value={form.description} onChange={(e) => set("description", e.target.value)} className={field} placeholder="Describe the product: materials, comfort, care instructions…" />
-              </div>
             </Card>
 
             <Card id="images" tab="images" activeTab={activeTab} drawer={drawer} title="Images" hint="Set an image alt text to Product Dimensions to show it as the product dimension diagram. The primary image is shown on product cards.">
@@ -637,6 +668,7 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
                 <ul className="space-y-3">
                   {form.images.map((image, index) => (
                     <li key={`${image.image_url}-${index}`} className="flex items-center gap-3 border border-gray-100 p-3">
+                      <span className="w-16 shrink-0 text-xs font-semibold text-slate-500">Image {index + 1}</span>
                       <img src={getMediaUrl(image.image_url)} alt="" className="h-16 w-16 shrink-0 rounded-lg bg-slate-100 object-cover" onError={(e) => ((e.target as HTMLImageElement).style.opacity = "0.2")} />
 
                       <div className="min-w-0 flex-1 space-y-1.5">
@@ -730,7 +762,13 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
                 </div>
                 <div>
                   <Label htmlFor="discount-rate">Discount %</Label>
-                  <input id="discount-rate" type="text" value={off} readOnly className={`${field} bg-slate-50 font-semibold text-green-700`} />
+                  <input id="discount-rate" type="text" inputMode="numeric" value={off} onChange={(e) => {
+                    const rate = e.target.value.replace(/\D/g, "");
+                    if (rate === "") { set("discount_price", ""); return; }
+                    const percentage = Math.min(99, Number(rate));
+                    const original = Number(form.price);
+                    if (original > 0) set("discount_price", String(Math.round(original * (100 - percentage) / 100)));
+                  }} className={field} />
                 </div>
               </div>
 
@@ -743,8 +781,13 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
                 <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-green-800">Website rating</h3>
                 <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <Label htmlFor="rating" optional>Rating (0-5)</Label>
-                    <input id="rating" type="text" inputMode="decimal" value={form.catalog_rating} onChange={(e) => set("catalog_rating", e.target.value.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1"))} className={field} placeholder="4.8" />
+                    <Label htmlFor="rating" optional>Rating (1-5)</Label>
+                    <input id="rating" type="text" inputMode="decimal" aria-invalid={Boolean(ratingError)} value={form.catalog_rating} onChange={(e) => {
+                      const value = e.target.value;
+                      set("catalog_rating", value);
+                      setRatingError(value !== "" && (!/^\d+(\.\d+)?$/.test(value) || Number(value) < 1 || Number(value) > 5) ? "Enter a rating from 1 to 5." : "");
+                    }} className={`${field} ${ratingError ? "border-red-500 focus:border-red-500 focus:ring-red-100" : ""}`} placeholder="4.8" />
+                    {ratingError && <p className="mt-1 text-xs text-red-600">{ratingError}</p>}
                   </div>
                   <div>
                     <Label htmlFor="rating-count">Rating count</Label>
@@ -753,13 +796,6 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
                 </div>
               </div>
 
-              <div className="mt-5 border-t border-gray-200 pt-4">
-                <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-green-800">Inventory details</h3>
-                <div className="mt-3 max-w-sm">
-                  <Label htmlFor="sku" optional>SKU</Label>
-                  <input id="sku" value={form.sku} onChange={(e) => set("sku", e.target.value)} className={field} placeholder="WV-009" />
-                </div>
-              </div>
             </section>
 
             <Card tab="pricing" activeTab={activeTab} drawer={drawer} title="Variants" hint="Use variants for options like size, colour or finish. Each can have its own SKU, price and stock.">
@@ -960,7 +996,7 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
           </div>
 
           {/* ---------- Side column ---------- */}
-          <aside className={`min-w-0 space-y-4 ${drawer ? "" : "xl:sticky xl:top-24 xl:self-start"}`}>
+          <aside className={`min-w-0 space-y-2 ${drawer ? "" : "xl:sticky xl:top-24 xl:self-start"}`}>
 
             <Card tab="basic-information" activeTab={activeTab} drawer={drawer} title="Product settings">
               <div>
@@ -1010,25 +1046,38 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
             </Card>
 
             <Card id="website-preview" tab="website-preview" activeTab={activeTab} drawer={drawer} title="Website preview">
-              <div className="overflow-hidden border border-gray-100">
-                <div className="relative aspect-[4/3] bg-slate-100">
-                  {primaryImage ? (
-                    <img src={getMediaUrl(primaryImage.image_url)} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-slate-300"><ImageOff size={32} /></div>
-                  )}
-                  {off > 0 && (
-                    <span className="absolute left-3 top-3 bg-black px-2 py-1 text-[10px] font-semibold text-white">{off}% OFF</span>
-                  )}
+              <p className="text-sm text-slate-500">Controls how this product appears on storefront product cards.</p>
+              <div className="grid gap-5 lg:grid-cols-2">
+                {([
+                  { label: "Primary image", image: primaryImage, kind: "primary" },
+                  { label: "Hover image", image: form.images.find((image) => image !== primaryImage && !/dimension|measurement|size\\s*chart/i.test(image.alt_text)), kind: "hover" },
+                ] as const).map(({ label, image, kind }) => (
+                  <div key={kind} className="min-w-0">
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</p>
+                    <button type="button" onClick={() => image ? (kind === "primary" ? makePrimary(form.images.indexOf(image)) : chooseHoverImage(image.image_url)) : (setUploadTarget(kind), fileInputRef.current?.click())} className="group flex aspect-[4/3] w-full flex-col items-center justify-center overflow-hidden border border-dashed border-gray-300 bg-white text-slate-500 hover:border-green-600 hover:text-green-700">
+                      {image ? <img src={getMediaUrl(image.image_url)} alt={image.alt_text || label} className="h-full w-full object-contain" /> : <><Upload size={22} /><span className="mt-2 text-[11px] font-medium uppercase tracking-wider">Upload</span></>}
+                    </button>
+                    <div className="mt-2 flex gap-2">
+                      <input readOnly value={image?.image_url ?? ""} placeholder="Select an image below or upload" className={`${field} min-w-0 text-xs`} />
+                      <button type="button" onClick={() => { setUploadTarget(kind); fileInputRef.current?.click(); }} disabled={uploading} className="shrink-0 border border-gray-200 px-3 text-xs font-semibold text-slate-600 hover:bg-gray-50 disabled:opacity-50">{uploading ? "Uploading…" : "Upload"}</button>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">{kind === "primary" ? "Shown by default on the card." : "Uses another product image for the card hover state."}</p>
+                    {kind === "hover" && form.images.length > 1 && <select aria-label="Select hover image" value={hoverImageUrl} onChange={(event) => chooseHoverImage(event.target.value)} className={`${field} mt-2`}><option value="">Choose an image from Images</option>{form.images.filter((item) => item !== primaryImage && !/dimension|measurement|size\s*chart/i.test(item.alt_text)).map((item) => <option key={item.image_url} value={item.image_url}>{item.alt_text || item.image_url}</option>)}</select>}
+                  </div>
+                ))}
+              </div>
+              <div className="border border-gray-100 bg-slate-50 p-4">
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Card preview</p>
+                <div className="mx-auto max-w-xs overflow-hidden border border-gray-100 bg-white">
+                  <div className="relative aspect-[4/3] bg-slate-100">{primaryImage ? <img src={getMediaUrl(primaryImage.image_url)} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-slate-300"><ImageOff size={32} /></div>}{off > 0 && <span className="absolute left-3 top-3 bg-black px-2 py-1 text-[10px] font-semibold text-white">{off}% OFF</span>}</div>
+                  <div className="p-4"><p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{categoryName || "Category"}</p><p className="mt-1 text-sm font-semibold text-slate-900">{form.name || "Product name"}</p><p className="mt-1 text-sm"><span className="font-bold text-slate-900">{formatINR(form.discount_price || form.price)}</span>{off > 0 && <span className="ml-2 text-xs text-slate-400 line-through">{formatINR(form.price)}</span>}</p></div>
                 </div>
-                <div className="p-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{categoryName || "Category"}</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{form.name || "Product name"}</p>
-                  <p className="mt-1 text-sm">
-                    <span className="font-bold text-slate-900">{formatINR(form.discount_price || form.price)}</span>
-                    {off > 0 && <span className="ml-2 text-xs text-slate-400 line-through">{formatINR(form.price)}</span>}
-                  </p>
-                </div>
+              </div>
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp" className="hidden" onChange={handleFileUpload} />
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs font-semibold text-slate-600">Product images</p>
+                <p className="mt-1 text-xs text-slate-500">Choose an existing image above or upload one. Reorder and manage all images in the Images tab.</p>
+                <div className="mt-3 flex flex-wrap gap-2">{form.images.filter((image) => !/dimension|measurement|size\s*chart/i.test(image.alt_text)).map((image, index) => <button key={`${image.image_url}-${index}`} type="button" onClick={() => makePrimary(form.images.indexOf(image))} className={`h-14 w-14 overflow-hidden border ${image === primaryImage ? "border-green-700 ring-1 ring-green-700" : "border-gray-200"}`} title={image.alt_text || "Set as primary image"}><img src={getMediaUrl(image.image_url)} alt={image.alt_text} className="h-full w-full object-cover" /></button>)}<button type="button" onClick={() => { setUploadTarget("primary"); fileInputRef.current?.click(); }} disabled={uploading} className="flex h-14 w-14 items-center justify-center border border-dashed border-gray-300 text-slate-500 hover:border-green-600 hover:text-green-700 disabled:opacity-50" aria-label="Upload product image"><Plus size={18} /></button></div>
               </div>
 
               {!isNew && form.status === "active" && (

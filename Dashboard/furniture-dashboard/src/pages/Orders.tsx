@@ -10,8 +10,6 @@ import {
   Eye,
   X,
   CalendarDays,
-  ChevronLeft,
-  ChevronRight,
   ChevronDown,
   ArrowLeft,
 } from "lucide-react";
@@ -21,6 +19,7 @@ import type { LucideIcon } from "lucide-react";
 import { getOrders, getShipments, getMediaUrl, getPayments, updateShipment } from "../services/api";
 import { formatOrderDateTime } from "../utils/orderDate";
 import { normalizeShipmentStage, SHIPMENT_STAGES, shipmentStageLabel, type ShipmentStage } from "../utils/shipmentStatus";
+import DateRangeCalendar from "../components/common/DateRangeCalendar";
 
 interface OrderItem {
   id?: number;
@@ -137,11 +136,7 @@ const formatPaymentStatus = (status: string) => {
 
 const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 const endOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
-const calendarDays = (month: Date) => {
-  const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
-  const start = new Date(month.getFullYear(), month.getMonth(), 1 - firstDay.getDay());
-  return Array.from({ length: 42 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
-};
+const MAX_CUSTOM_RANGE_DAYS = 62;
 
 const canvasToPdf = (canvas: HTMLCanvasElement) => {
   const encoded = canvas.toDataURL("image/jpeg", 0.94).split(",")[1];
@@ -563,6 +558,12 @@ const Orders = () => {
       return;
     }
 
+    if (Math.abs(selected.getTime() - rangeAnchor.getTime()) / 86_400_000 >= MAX_CUSTOM_RANGE_DAYS) {
+      setRangeAnchor(selected);
+      setDateRange({ start: selected, end: endOfDay(selected) });
+      return;
+    }
+
     const start = selected < rangeAnchor ? selected : rangeAnchor;
     const end = selected < rangeAnchor ? rangeAnchor : selected;
     setDateRange({ start, end: endOfDay(end) });
@@ -686,60 +687,15 @@ const Orders = () => {
                   ))}
                 </aside>
 
-                <div className="min-w-0 flex-1 p-2 sm:p-3">
-                  <div className="mb-3 flex items-center justify-between">
-                    <button type="button" aria-label="Previous month" onClick={() => setCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="flex h-8 w-8 items-center justify-center border border-gray-200 text-slate-600 hover:bg-gray-50"><ChevronLeft className="h-3.5 w-3.5" /></button>
-                    <div className="grid flex-1 grid-cols-2 text-center text-sm font-semibold text-slate-800">
-                      <span>{calendarMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span>
-                      <span className="hidden sm:block">{new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span>
-                    </div>
-                    <button type="button" aria-label="Next month" onClick={() => setCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="flex h-8 w-8 items-center justify-center border border-gray-200 text-slate-600 hover:bg-gray-50"><ChevronRight className="h-3.5 w-3.5" /></button>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {[calendarMonth, new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1)].map((month) => (
-                      <div key={`${month.getFullYear()}-${month.getMonth()}`} className="hidden sm:block">
-                        <div className="mb-1 grid grid-cols-7 text-center text-xs font-medium text-slate-400">
-                          {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => <span key={day} className="py-2">{day}</span>)}
-                        </div>
-                        <div className="grid grid-cols-7 gap-y-1">
-                          {calendarDays(month).map((day) => {
-                            const dayTime = startOfDay(day).getTime();
-                            const rangeStart = dateRange.start?.getTime();
-                            const rangeEnd = dateRange.end ? startOfDay(dateRange.end).getTime() : rangeStart;
-                            const inRange = rangeStart !== undefined && rangeStart !== null && rangeEnd !== undefined && rangeEnd !== null && dayTime >= Math.min(rangeStart, rangeEnd) && dayTime <= Math.max(rangeStart, rangeEnd);
-                            const isBoundary = dayTime === rangeStart || dayTime === rangeEnd;
-                            const disabled = dayTime > startOfDay(new Date()).getTime();
-                            return (
-                              <button key={day.toISOString()} type="button" disabled={disabled} onClick={() => chooseCalendarDate(day)} className={`h-8 text-xs ${day.getMonth() !== month.getMonth() ? "text-slate-300" : "text-slate-700"} ${inRange ? "bg-green-50" : ""} ${isBoundary ? "bg-green-700 font-semibold text-white" : "hover:bg-gray-100"} disabled:cursor-not-allowed disabled:opacity-40`}>
-                                {day.getDate()}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                    <div className="sm:hidden">
-                      <div className="mb-1 grid grid-cols-7 text-center text-xs font-medium text-slate-400">{["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => <span key={day} className="py-2">{day}</span>)}</div>
-                      <div className="grid grid-cols-7 gap-y-1">
-                        {calendarDays(calendarMonth).map((day) => {
-                          const dayTime = startOfDay(day).getTime();
-                          const rangeStart = dateRange.start?.getTime();
-                          const rangeEnd = dateRange.end ? startOfDay(dateRange.end).getTime() : rangeStart;
-                          const inRange = rangeStart !== undefined && rangeStart !== null && rangeEnd !== undefined && rangeEnd !== null && dayTime >= Math.min(rangeStart, rangeEnd) && dayTime <= Math.max(rangeStart, rangeEnd);
-                          const isBoundary = dayTime === rangeStart || dayTime === rangeEnd;
-                          const disabled = dayTime > startOfDay(new Date()).getTime();
-                          return <button key={day.toISOString()} type="button" disabled={disabled} onClick={() => chooseCalendarDate(day)} className={`h-8 text-xs ${day.getMonth() !== calendarMonth.getMonth() ? "text-slate-300" : "text-slate-700"} ${inRange ? "bg-green-50" : ""} ${isBoundary ? "bg-green-700 font-semibold text-white" : "hover:bg-gray-100"} disabled:cursor-not-allowed disabled:opacity-40`}>{day.getDate()}</button>;
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3">
-                    <p className="text-xs text-slate-500">Select a start date, then an end date.</p>
-                    <button type="button" onClick={() => { setRangeAnchor(null); setShowDatePicker(false); }} className="border border-green-700 bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800">Apply</button>
-                  </div>
-                </div>
+                <DateRangeCalendar
+                  calendarMonth={calendarMonth}
+                  dateRange={dateRange}
+                  rangeAnchor={rangeAnchor}
+                  onMonthChange={setCalendarMonth}
+                  onChooseDate={chooseCalendarDate}
+                  onClear={() => { setDateRange({ start: null, end: null }); setRangeAnchor(null); setActiveDatePreset("All"); setShowDatePicker(false); }}
+                  onApply={() => { setRangeAnchor(null); setShowDatePicker(false); }}
+                />
               </div>
             )}
           </div>
@@ -1011,7 +967,7 @@ const SummaryCard = ({
   valueStyle,
 }: SummaryCardProps) => {
   return (
-    <div className="min-w-0 border border-gray-200 bg-white p-4 sm:p-5">
+    <button type="button" onClick={onClick} aria-label={`View ${title}`} className="min-w-0 cursor-pointer border border-gray-200 bg-white p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:ring-offset-2 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="min-h-8 whitespace-normal break-words text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500 sm:text-xs">{title}</p>
@@ -1019,7 +975,7 @@ const SummaryCard = ({
         </div>
         <Icon className={`h-5 w-5 shrink-0 ${iconStyle}`} />
       </div>
-    </div>
+    </button>
   );
 };
 
