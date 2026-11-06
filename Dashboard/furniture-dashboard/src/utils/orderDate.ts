@@ -1,4 +1,15 @@
-﻿const INDIA_TIME_ZONE = "Asia/Kolkata";
+const INDIA_TIME_ZONE = "Asia/Kolkata";
+
+export const getOrderTimestamp = (value?: string | null, orderNumber?: string | null) => {
+  const orderTimestamp = orderNumber?.match(/^ORD[-_](\d{13})$/i)?.[1];
+  if (orderTimestamp) return Number(orderTimestamp);
+  if (!value) return Number.NaN;
+  const normalized = value.includes(" ") && !value.includes("T")
+    ? value.replace(" ", "T")
+    : value;
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+  return new Date(hasTimezone ? normalized : `${normalized}Z`).getTime();
+};
 
 export const formatOrderDateTime = (
   value?: string | null,

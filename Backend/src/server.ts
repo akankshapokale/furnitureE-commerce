@@ -123,6 +123,21 @@ const startServer = async () => {
   try {
     await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS department TEXT");
     await pool.query("ALTER TABLE order_items ADD COLUMN IF NOT EXISTS inventory_deducted BOOLEAN NOT NULL DEFAULT FALSE");
+    await pool.query("ALTER TABLE hero_banners ADD COLUMN IF NOT EXISTS display_order INTEGER");
+    await pool.query(`
+      WITH ordered AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY id ASC) AS next_order
+        FROM hero_banners
+      )
+      UPDATE hero_banners AS banners
+      SET display_order = ordered.next_order
+      FROM ordered
+      WHERE banners.id = ordered.id
+        AND banners.display_order IS NULL
+    `);
+    await pool.query("ALTER TABLE hero_banners ALTER COLUMN display_order SET DEFAULT 0");
+    await pool.query("ALTER TABLE hero_banners ALTER COLUMN display_order SET NOT NULL");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_hero_banners_display_order ON hero_banners (display_order, id)");
   } catch (error) {
     console.warn("Warning: Staff schema migration skipped:", (error as Error).message);
   }
