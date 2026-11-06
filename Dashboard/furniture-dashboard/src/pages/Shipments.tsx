@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   Search,
@@ -88,22 +88,6 @@ const Shipments = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [showStatusFilter, setShowStatusFilter] = useState(false);
-  const statusFilterRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!statusFilterRef.current?.contains(event.target as Node)) setShowStatusFilter(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setShowStatusFilter(false);
-    };
-    document.addEventListener("pointerdown", closeOnOutsidePointer);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOnOutsidePointer);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, []);
 
   const [selectedShipment, setSelectedShipment] =
     useState<Shipment | null>(null);
@@ -561,7 +545,7 @@ const Shipments = () => {
 
             {/* Shipment Status Filter */}
 
-            <div ref={statusFilterRef} className="relative shrink-0">
+            <div className="relative shrink-0">
               <button
                 type="button"
                 onClick={() => setShowStatusFilter((open) => !open)}

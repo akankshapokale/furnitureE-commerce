@@ -1,7 +1,7 @@
 /* Product details page */
 
 .pd-page {
-  background: #ffffff;
+  background: var(--site-warm-bg, #e9e4dc);
   color: #1f1f1f;
   padding: 24px 0 88px;
 }
@@ -776,7 +776,7 @@
 /* Product page gallery and buy panel alignment */
 .pd-page {
   padding-top: 28px;
-  background: #ffffff;
+  background: var(--site-warm-bg, #e9e4dc);
 }
 
 .pd-container {

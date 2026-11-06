@@ -1186,9 +1186,7 @@ const CategoryDetail = () => {
   };
 
   return (
-    <div className={`category-detail-page ${
-  currentCategory.id === "office-furniture" ? "office-furniture-page" : ""
-}`}>
+    <div className="category-detail-page">
       {/* Breadcrumbs */}
       <nav className="category-breadcrumbs" aria-label="Breadcrumb">
         <Link to="/">Home</Link>

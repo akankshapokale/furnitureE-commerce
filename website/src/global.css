@@ -5643,6 +5643,53 @@ img {
     width: 40%;
   }
 }
+
+@media (max-width: 600px) {
+  .home-showcase-actions {
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    width: 100%;
+  }
+
+  .home-showcase-button {
+    flex: 1 1 0;
+    justify-content: center;
+    min-width: 0;
+    padding: 8px 9px !important;
+    font-size: 11px !important;
+    white-space: nowrap;
+  }
+
+  .home-reviews-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .home-review-card {
+    height: auto !important;
+    min-height: 270px;
+  }
+
+  .home-review-content {
+    height: auto !important;
+    min-height: 270px;
+    justify-content: flex-start !important;
+  }
+
+  .home-review-author {
+    margin-top: 12px;
+  }
+
+  .home-review-product {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+
+  .home-review-quote {
+    display: block;
+    overflow: visible;
+  }
+}
 /* ==========================================================
    STAGING SPACES - IKEA INSPIRED MODERN NAVIGATION
    ========================================================== */

@@ -85,7 +85,7 @@ const Login = () => {
           {portals.find((p) => p.key === portal)?.hint}
         </p>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <form onSubmit={handleSubmit} autoComplete="off" className="mt-6 space-y-4">
           <div>
             <label className="mb-1.5 block text-sm font-semibold text-gray-700">
               Email or phone number
@@ -95,7 +95,7 @@ const Login = () => {
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               placeholder="you@company.com or 9876543210"
-              autoComplete="username"
+              autoComplete="off"
               required
               className="h-12 w-full rounded-lg border border-gray-200 px-3 text-base font-medium outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
             />
@@ -111,7 +111,7 @@ const Login = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
-                autoComplete="current-password"
+                autoComplete="off"
                 required
                 className="h-12 w-full rounded-lg border border-gray-200 pl-3 pr-11 text-base font-medium outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
               />

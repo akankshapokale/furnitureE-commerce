@@ -156,6 +156,26 @@ const startServer = async () => {
       )
     `);
     await pool.query(`ALTER TABLE custom_size_requests ADD COLUMN IF NOT EXISTS order_id INTEGER UNIQUE REFERENCES orders(id) ON DELETE SET NULL`);
+    await pool.query(`ALTER TABLE custom_size_requests ADD COLUMN IF NOT EXISTS additional_charges NUMERIC(12, 2) DEFAULT 0 CHECK (additional_charges IS NULL OR additional_charges >= 0)`);
+    await pool.query(`ALTER TABLE custom_size_requests ADD COLUMN IF NOT EXISTS terms_and_conditions TEXT`);
+    await pool.query(`ALTER TABLE custom_size_requests ADD COLUMN IF NOT EXISTS validity_date DATE`);
+    await pool.query(`ALTER TABLE custom_size_requests ADD COLUMN IF NOT EXISTS reference_image TEXT`);
+    await pool.query(`ALTER TABLE custom_size_requests ADD COLUMN IF NOT EXISTS customer_rejection_reason TEXT`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS custom_size_request_history (
+        id BIGSERIAL PRIMARY KEY,
+        request_id BIGINT NOT NULL REFERENCES custom_size_requests(id) ON DELETE CASCADE,
+        from_status TEXT,
+        to_status TEXT NOT NULL,
+        action_by_type TEXT NOT NULL CHECK (action_by_type IN ('customer', 'admin', 'system')),
+        action_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        action_by_name TEXT,
+        remarks TEXT,
+        metadata JSONB,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_csr_history_request ON custom_size_request_history(request_id, created_at ASC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS custom_size_requests_customer_created_idx ON custom_size_requests (customer_id, created_at DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS custom_size_requests_status_created_idx ON custom_size_requests (status, created_at DESC)`);
   } catch (error) {

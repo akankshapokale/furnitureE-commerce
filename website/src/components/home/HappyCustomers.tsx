@@ -90,6 +90,10 @@ const HappyCustomers = () => {
           }
         }
         @media (max-width: 560px) {
+          .happy-customers-section {
+            padding-top: 20px !important;
+          }
+
           .happy-customers-section .service-pillars-grid,
           .happy-customers-section .customer-spaces-grid {
             grid-template-columns: minmax(0, 1fr);
@@ -212,7 +216,7 @@ const HappyCustomers = () => {
         </div>
 
         {/* Share your space banner */}
-        <div style={{
+        <div className="home-showcase-banner" style={{
           background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
           borderRadius: "0",
           padding: "20px 28px",
@@ -238,9 +242,10 @@ const HappyCustomers = () => {
             </p>
           </div>
 
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <div className="home-showcase-actions" style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
             <Link
               to="/contact"
+              className="home-showcase-button"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -259,6 +264,7 @@ const HappyCustomers = () => {
             </Link>
             <Link
               to="/categories"
+              className="home-showcase-button"
               style={{
                 display: "inline-flex",
                 alignItems: "center",

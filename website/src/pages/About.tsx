@@ -174,9 +174,12 @@ const About = () => {
         background: var(--site-warm-bg);
       }
 
-      .about-page .value-card,
-      .about-page .build-card {
+      .about-page .value-card {
         background: #ffffff;
+      }
+
+      .about-page .build-card {
+        background: var(--site-warm-bg);
       }
 
       .about-page .info-cta {
@@ -354,8 +357,9 @@ const About = () => {
       .build-card:not(:last-child)::after {
         content: ">";
         position: absolute;
-        top: 0;
-        right: -18px;
+        top: 50%;
+        right: -30px;
+        transform: translateY(-50%);
         display: grid;
         width: 36px;
         height: 38px;
@@ -591,7 +595,7 @@ const About = () => {
 
         .build-grid {
           grid-template-columns: minmax(0, 1fr);
-          gap: 40px;
+          gap: 38px;
           padding-left: 0;
         }
 
@@ -599,54 +603,33 @@ const About = () => {
           content: none;
         }
 
-        .build-card {
-          display: grid;
-          grid-template-columns: 38px minmax(0, 1fr);
-          column-gap: 14px;
-          align-items: start;
-          padding: 0;
-          text-align: left;
+        .about-page .build-card {
+          padding-top: 50px;
+          text-align: center;
+          background: linear-gradient(
+            to bottom,
+            transparent 38px,
+            #a3a3a3 38px,
+            #a3a3a3 50px,
+            transparent 50px
+          ) center top / 2px 50px no-repeat, var(--site-warm-bg);
         }
 
         .build-card::before {
-          left: 0;
-          transform: none;
-        }
-
-        .build-card h3,
-        .build-card p {
-          grid-column: 2;
-          text-align: left;
-        }
-
-        .build-card h3 {
-          margin: 4px 0 6px;
+          left: 50%;
+          transform: translateX(-50%);
         }
 
         .build-card:not(:last-child)::after {
-          content: "↓";
+          content: "";
           top: auto;
           right: auto;
-          bottom: -25px;
-          left: 18px;
+          bottom: -38px;
+          left: 50%;
           transform: translateX(-50%);
-          width: 24px;
-          height: 24px;
-          font-size: 22px;
-        }
-
-        .build-card:not(:last-child)::after {
-          content: "\\2193";
-          top: auto;
-          right: auto;
-          bottom: -32px;
-          left: 19px;
-          width: 24px;
-          height: 24px;
-          border: 0;
-          color: #9a7b50;
-          font-size: 22px;
-          transform: translateX(-50%);
+          width: 2px;
+          height: 38px;
+          background: #a3a3a3;
         }
 
         .build-intro {
@@ -659,6 +642,31 @@ const About = () => {
 
         .info-section {
           padding: 36px 6%;
+        }
+
+        .value-card {
+          display: grid;
+          grid-template-columns: 48px minmax(0, 1fr);
+          align-items: start;
+          column-gap: 14px;
+          padding: 16px;
+        }
+
+        .value-icon {
+          grid-column: 1;
+          grid-row: 1;
+          align-self: center;
+        }
+
+        .value-card h3 {
+          grid-column: 2;
+          grid-row: 1;
+          margin: 0;
+        }
+
+        .value-card p {
+          grid-column: 1 / -1;
+          margin: 6px 0 0;
         }
 
         .about-story {
@@ -694,7 +702,7 @@ const About = () => {
         }
 
         .value-card {
-          padding: 20px;
+          padding: 14px 16px;
         }
 
         .info-cta {
@@ -759,7 +767,7 @@ const About = () => {
 
         .build-grid {
           grid-template-columns: minmax(0, 1fr);
-          gap: 40px;
+          gap: 14px;
           margin-top: 24px;
         }
 
@@ -769,10 +777,12 @@ const About = () => {
 
         .value-card h3 {
           font-size: 17px;
+          padding-top: 7px;
         }
 
         .value-card p {
           font-size: 13px;
+          margin: 0;
         }
 
         .info-cta {

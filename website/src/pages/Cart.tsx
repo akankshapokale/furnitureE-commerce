@@ -781,7 +781,7 @@ const Cart = () => {
 
         @media (max-width: 600px) {
           .cart-page {
-            padding: 20px 14px 40px;
+            padding: 24px 16px 40px;
           }
 
           .cart-header {
@@ -802,21 +802,16 @@ const Cart = () => {
 
           .cart-product {
             display: grid;
-            grid-template-columns: 84px minmax(0, 1fr);
-            gap: 10px;
-            padding: 16px 0;
-          }
-
-          .cart-products {
-            padding-right: 14px;
-            padding-left: 14px;
+            grid-template-columns: 92px minmax(0, 1fr);
+            gap: 12px;
+            padding: 18px 0;
           }
 
           .cart-product-image {
             grid-column: 1;
             grid-row: 1 / span 2;
-            width: 84px;
-            height: 98px;
+            width: 92px;
+            height: 105px;
           }
 
           .cart-product-info {
@@ -839,12 +834,7 @@ const Cart = () => {
           }
 
           .cart-product-actions {
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 4px;
+            gap: 8px 12px;
           }
 
           .quantity-control button {
@@ -865,10 +855,8 @@ const Cart = () => {
           .cart-product-total {
             grid-column: 2;
             grid-row: 2;
-            align-self: start;
-            justify-self: start;
+            align-self: end;
             padding-top: 0;
-            margin-top: 8px;
             font-size: 14px;
           }
 

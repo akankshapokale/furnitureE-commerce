@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -34,7 +34,6 @@ import {
   getPayments,
   getProducts,
 } from "../services/api";
-import { getOrderTimestamp } from "../utils/orderDate";
 
 interface OrderItem {
   product_id?: number;
@@ -113,27 +112,11 @@ const Sales = () => {
   });
   const [activeDatePreset, setActiveDatePreset] = useState("Last 30 Days");
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const datePickerRef = useRef<HTMLDivElement>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
   const [rangeAnchor, setRangeAnchor] = useState<Date | null>(null);
-
-  useEffect(() => {
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!datePickerRef.current?.contains(event.target as Node)) setShowDatePicker(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setShowDatePicker(false);
-    };
-    document.addEventListener("pointerdown", closeOnOutsidePointer);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOnOutsidePointer);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, []);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -204,7 +187,7 @@ const Sales = () => {
     setActiveDatePreset("Custom Range");
     if (!rangeAnchor) {
       setRangeAnchor(selected);
-      setDateRange({ start: selected, end: endOfDay(selected) });
+      setDateRange({ start: selected, end: null });
       return;
     }
     const start = selected < rangeAnchor ? selected : rangeAnchor;
@@ -217,9 +200,9 @@ const Sales = () => {
     const now = new Date();
     const rangeEnd = dateRange.end ? endOfDay(dateRange.end).getTime() : now.getTime();
     const rangeStart = dateRange.start?.getTime() ?? 0;
-    const inRange = (raw?: string, orderNumber?: string) => {
+    const inRange = (raw?: string) => {
       if (!raw) return false;
-      const timestamp = getOrderTimestamp(raw, orderNumber);
+      const timestamp = new Date(raw).getTime();
       return Number.isFinite(timestamp) && timestamp >= rangeStart && timestamp <= rangeEnd;
     };
     const isSale = (order: Order) =>
@@ -228,7 +211,7 @@ const Sales = () => {
       PAID.includes(payment.payment_status?.toLowerCase());
 
     const sales = orders.filter(
-      (order) => inRange(order.created_at, order.order_number) && isSale(order)
+      (order) => inRange(order.created_at) && isSale(order)
     );
 
     const totalSales = sales.reduce(
@@ -244,7 +227,7 @@ const Sales = () => {
       .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
 
     const returnedValue = orders
-      .filter((order) => inRange(order.created_at, order.order_number) && !isSale(order))
+      .filter((order) => inRange(order.created_at) && !isSale(order))
       .reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
 
     // Products
@@ -349,7 +332,7 @@ const Sales = () => {
     const statusMap = new Map<string, number>();
 
     orders
-      .filter((order) => inRange(order.created_at, order.order_number))
+      .filter((order) => inRange(order.created_at))
       .forEach((order) => {
         const pay = (order.payment_status || "pending").toLowerCase();
         paymentMap.set(
@@ -376,7 +359,7 @@ const Sales = () => {
 
     return {
       sales,
-      reportOrders: orders.filter((order) => inRange(order.created_at, order.order_number)),
+      reportOrders: orders.filter((order) => inRange(order.created_at)),
       totalSales,
       collected,
       outstanding: Math.max(0, totalSales - collected),
@@ -475,7 +458,7 @@ const Sales = () => {
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <div ref={datePickerRef} className="relative">
+            <div className="relative">
               <button type="button" onClick={() => setShowDatePicker((open) => !open)} aria-expanded={showDatePicker} className="inline-flex h-11 items-center gap-2 border border-green-200 bg-green-50 px-4 text-sm text-green-800 hover:bg-green-100">
                 <CalendarDays className="h-4 w-4" /> {activeDatePreset}
               </button>
@@ -510,8 +493,8 @@ const Sales = () => {
                       })}
                     </div>
                     <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3">
-                      <p className="text-xs text-slate-500">{rangeAnchor ? "Choose an end date, or apply this single day." : "Select a day, or choose start and end dates."}</p>
-                      <div className="flex gap-2"><button type="button" onClick={() => { setDateRange({ start: null, end: null }); setRangeAnchor(null); setActiveDatePreset("All Time"); setShowDatePicker(false); }} className="border border-gray-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-gray-50">Clear</button><button type="button" onClick={() => { setRangeAnchor(null); setShowDatePicker(false); }} className="border border-green-700 bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800">Apply</button></div>
+                      <p className="text-xs text-slate-500">Select a start date, then an end date.</p>
+                      <button type="button" onClick={() => { setRangeAnchor(null); setShowDatePicker(false); }} className="border border-green-700 bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800">Apply</button>
                     </div>
                   </div>
                 </div>
