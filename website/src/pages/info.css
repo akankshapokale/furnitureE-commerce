@@ -673,7 +673,6 @@
 }
 
 /* Keep the opening sections on About and Contact aligned to the same viewport height. */
-.about-page > .info-section:first-child,
 .contact-page > .info-section:first-child {
   min-height: calc(100svh - 76px);
 }
