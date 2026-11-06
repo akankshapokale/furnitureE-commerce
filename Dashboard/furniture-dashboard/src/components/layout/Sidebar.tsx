@@ -6,11 +6,8 @@ import {
   Truck,
   BarChart3,
   TrendingUp,
-  UserCog,
   Globe,
   ChevronDown,
-  UsersRound,
-  CalendarDays,
   Ruler,
 } from "lucide-react";
 import { useState } from "react";
@@ -71,32 +68,19 @@ const commerceSection = {
   items: [{ title: "Website Control", path: "/website-control", icon: Globe }],
 };
 
-const peopleSection = {
-  title: "People",
-  collapsible: true,
-  items: [
-    { title: "Team Management", path: "/people", icon: UsersRound },
-    { title: "Staff Management", path: "/people/staff", icon: UserCog },
-    { title: "HR & Leave", path: "/hr-leave", icon: CalendarDays },
-  ],
-};
-
-
 const Sidebar = ({ onClose }: SidebarProps) => {
   const { can } = useAuth();
   const location = useLocation();
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     Ecommerce: location.pathname === "/website-control",
     Overview: ["/", "/orders", "/orders/returns", "/payments"].includes(location.pathname),
-    People: location.pathname.startsWith("/people") || location.pathname.startsWith("/hr-leave"),
   });
 
-  const visibleSections = [...menuSections, commerceSection, peopleSection]
+  const visibleSections = [...menuSections, commerceSection]
     .map((section) => ({
       ...section,
       items: section.items.filter((item) => {
         if (item.path === "/website-control") return true;
-        if (section.title === "People") return can("people");
         const required = permissionForPath(item.path.split("?")[0]);
         return required ? can(required) : false;
       }),

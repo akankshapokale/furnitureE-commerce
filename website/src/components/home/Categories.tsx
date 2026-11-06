@@ -197,6 +197,14 @@ const Categories = () => {
 
         /* Mobile (1 or 2 columns) */
         @media (max-width: 560px) {
+          .info-page {
+            padding-bottom: 0;
+          }
+
+          .info-section {
+            padding-bottom: 0;
+          }
+
           .info-hero {
             padding: 36px 0 28px;
           }
@@ -213,6 +221,7 @@ const Categories = () => {
           .cat-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 16px 12px;
+            padding-bottom: 0;
           }
 
           .cat-item-info h3 {

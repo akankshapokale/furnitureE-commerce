@@ -103,15 +103,31 @@ export const getOrders = () => {
   return api.get("/orders");
 };
 
+export interface CustomSizeStatusHistory {
+  id: number;
+  request_id: number;
+  from_status: string | null;
+  to_status: string;
+  action_by_type: "customer" | "admin" | "system";
+  action_by_id: number | null;
+  action_by_name: string | null;
+  remarks: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
 export interface CustomSizeRequestRecord {
   id: number;
   request_id: string;
+  customer_id: number | null;
   customer_name: string;
   customer_email: string;
   customer_phone: string | null;
   product_id: number | null;
   product_name: string;
   product_image: string | null;
+  additional_requirements?: string | null;
+  reference_image?: string | null;
   length_cm: string | number;
   width_cm: string | number;
   height_cm: string | number;
@@ -120,17 +136,32 @@ export interface CustomSizeRequestRecord {
   admin_remarks: string | null;
   quotation_amount: string | number | null;
   quotation_details: string | null;
+  additional_charges?: string | number | null;
+  terms_and_conditions?: string | null;
+  validity_date?: string | null;
   customer_decision: "Accepted" | "Rejected" | null;
+  customer_decided_at?: string | null;
+  customer_rejection_reason?: string | null;
+  quotation_sent_at?: string | null;
+  order_id?: number | null;
   created_at: string;
+  updated_at?: string;
+  status_history?: CustomSizeStatusHistory[];
 }
 
 export const getCustomSizeRequests = () => api.get("/custom-size-requests/admin");
-export const updateCustomSizeRequest = (id: number, data: {
-  status: CustomSizeRequestRecord["status"];
-  admin_remarks: string;
-  quotation_amount: string;
+export const reviewCustomSizeRequest = (id: number, data?: { admin_remarks?: string }) =>
+  api.post(`/custom-size-requests/admin/${id}/review`, data || {});
+export const sendCustomSizeQuotation = (id: number, data: {
+  quotation_amount: string | number;
   quotation_details: string;
-}) => api.patch(`/custom-size-requests/admin/${id}`, data);
+  additional_charges?: string | number;
+  terms_and_conditions?: string;
+  validity_date?: string;
+  admin_remarks?: string;
+}) => api.post(`/custom-size-requests/admin/${id}/quote`, data);
+export const updateCustomSizeRequest = (id: number, data: Partial<CustomSizeRequestRecord>) =>
+  api.patch(`/custom-size-requests/admin/${id}`, data);
 
 // ==================== PRODUCTS (CMS) ====================
 

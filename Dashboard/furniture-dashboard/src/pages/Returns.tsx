@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -54,23 +54,7 @@ const Returns = () => {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const datePickerRef = useRef<HTMLDivElement>(null);
   const [selectedOrder, setSelectedOrder] = useState<ReturnOrder | null>(null);
-
-  useEffect(() => {
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!datePickerRef.current?.contains(event.target as Node)) setShowDatePicker(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setShowDatePicker(false);
-    };
-    document.addEventListener("pointerdown", closeOnOutsidePointer);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOnOutsidePointer);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -167,7 +151,7 @@ const Returns = () => {
           <label className="relative min-w-0 flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} type="search" placeholder="Search order, customer, product or reason..." className="h-11 w-full rounded-none border border-gray-200 bg-white pl-10 pr-3 text-sm outline-none focus:border-green-500" /></label>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-11 min-w-48 border border-gray-200 bg-white px-3 text-sm text-slate-700">{["All Statuses", "Pending Review", "Approved", "Cancelled", "Returned (RTO / Refunded)"].map((status) => <option key={status}>{status}</option>)}</select>
           <select value={productFilter} onChange={(event) => setProductFilter(event.target.value)} className="h-11 min-w-52 border border-gray-200 bg-white px-3 text-sm text-slate-700">{["All Products", ...products].map((product) => <option key={product}>{product}</option>)}</select>
-          <div ref={datePickerRef} className="relative">
+          <div className="relative">
             <button type="button" onClick={() => setShowDatePicker((open) => !open)} className="inline-flex h-11 items-center gap-2 border border-gray-200 bg-white px-4 text-sm text-slate-700 hover:bg-gray-50"><CalendarDays className="h-4 w-4" />{fromDate || toDate ? `${fromDate || "Any"} to ${toDate || "Today"}` : "All dates"}</button>
             {showDatePicker && <div className="absolute right-0 z-40 mt-2 grid w-64 gap-3 border border-gray-200 bg-white p-4"><label className="grid gap-1 text-xs font-medium text-slate-500">From<input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="h-10 border border-gray-200 px-2 text-sm text-slate-700" /></label><label className="grid gap-1 text-xs font-medium text-slate-500">To<input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="h-10 border border-gray-200 px-2 text-sm text-slate-700" /></label><button type="button" onClick={() => { setFromDate(""); setToDate(""); setShowDatePicker(false); }} className="border-t border-gray-100 pt-2 text-left text-xs font-semibold text-green-700">Clear dates</button></div>}
           </div>

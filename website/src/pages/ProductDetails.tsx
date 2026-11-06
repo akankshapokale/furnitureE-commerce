@@ -76,8 +76,9 @@ const toFallbackDetail = (item: CategoryProduct): ProductDetail => ({
 const getSizeVariantLabel = (variant: ProductVariant) => {
   const attributes = variant.attributes || {};
   const sizeAttribute = Object.entries(attributes).find(([key]) => /size|dimension/i.test(key));
-  const label = attributes.label?.trim();
-  return correctEdgeBanding(label || sizeAttribute?.[1]?.trim() || variant.variant_name);
+  const label = attributes.label == null ? "" : String(attributes.label).trim();
+  const sizeLabel = sizeAttribute?.[1] == null ? "" : String(sizeAttribute[1]).trim();
+  return correctEdgeBanding(label || sizeLabel || variant.variant_name);
 };
 
 const isSizeVariant = (variant: ProductVariant) => {
@@ -103,7 +104,7 @@ const getVariantSellingPrice = (variant: ProductVariant | undefined, baseSelling
 const getVariantMrp = (variant: ProductVariant | undefined) => {
   const entry = Object.entries(variant?.attributes || {}).find(([key]) => /^(?:old[\s_-]*price|mrp)$/i.test(key.trim()));
   if (!entry) return null;
-  const amount = Number(entry[1].replace(/[^\d.-]/g, ""));
+  const amount = Number(String(entry[1]).replace(/[^\d.-]/g, ""));
   return Number.isFinite(amount) ? amount : null;
 };
 const renderDescriptionPoint = (point: string) => {
@@ -174,6 +175,9 @@ const ProductDetails = () => {
   const [selectedDimension, setSelectedDimension] = useState("");
   const [customSizeSelected, setCustomSizeSelected] = useState(false);
   const [customDimensions, setCustomDimensions] = useState({ length: "", width: "", height: "" });
+  const [customUnit, setCustomUnit] = useState<"CM">("CM");
+  const [additionalRequirements, setAdditionalRequirements] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [customRequestState, setCustomRequestState] = useState({ loading: false, message: "", error: false });
 
   useEffect(() => {
@@ -181,6 +185,9 @@ const ProductDetails = () => {
     setSelectedDimension("");
     setCustomSizeSelected(false);
     setCustomDimensions({ length: "", width: "", height: "" });
+    setCustomUnit("CM");
+    setAdditionalRequirements("");
+    setFieldErrors({});
     setQuantity(1);
   }, [id]);
 
@@ -283,6 +290,10 @@ const ProductDetails = () => {
   const selectedDimensionOption = dimensionSizeOptions.length > 0
     ? selectedDimension || dimensionSizeOptions[0]
     : undefined;
+  const selectedDimensionIndex = selectedDimensionOption
+    ? dimensionSizeOptions.findIndex((size) => normalizeDimensionLabel(size) === normalizeDimensionLabel(selectedDimensionOption))
+    : -1;
+  const dimensionPriceOffset = Math.max(0, selectedDimensionIndex) * 2000;
   const matchingSizeVariant = (label: string | undefined) => label
     ? sizeVariants.find((variant) => normalizeDimensionLabel(getSizeVariantLabel(variant)) === normalizeDimensionLabel(label))
     : undefined;
@@ -290,8 +301,9 @@ const ProductDetails = () => {
   const matchingCustomVariant = customSizeIsValid ? matchingSizeVariant(customDimensionLabel) : undefined;
   const selectedVariant = customSizeSelected
     ? matchingCustomVariant
-    : sizeVariants.find((variant) => variant.id === selectedVariantId) ??
-      (dimensionSizeOptions.length > 0 ? matchingDimensionVariant : sizeVariants[0]);
+    : dimensionSizeOptions.length > 0
+      ? matchingDimensionVariant
+      : sizeVariants.find((variant) => variant.id === selectedVariantId) ?? sizeVariants[0];
   const hasSizeChoices = true; // Always offer custom dimensions, even when no standard sizes are configured.
   const customSizeLabel = `Custom: ${customDimensions.length || "—"} × ${customDimensions.width || "—"} × ${customDimensions.height || "—"} cm`;
   const productRegular = Number(product.price);
@@ -299,7 +311,10 @@ const ProductDetails = () => {
   const variantPriceDiff = selectedVariant?.attributes?.price_diff == null
     ? null
     : Number(selectedVariant.attributes.price_diff);
-  const variantSelling = getVariantSellingPrice(selectedVariant, productSelling);
+  const configuredVariantSelling = getVariantSellingPrice(selectedVariant, productSelling);
+  const variantSelling = configuredVariantSelling ?? (!customSizeSelected && dimensionSizeOptions.length > 0
+    ? productSelling + dimensionPriceOffset
+    : null);
   const variantMrp = getVariantMrp(selectedVariant);
   const regular = variantSelling === null
     ? productRegular
@@ -307,7 +322,7 @@ const ProductDetails = () => {
       ? Math.max(variantSelling, variantMrp)
       : variantPriceDiff !== null && Number.isFinite(variantPriceDiff)
         ? Math.max(variantSelling, productRegular + variantPriceDiff)
-        : Math.max(productRegular, variantSelling);
+        : Math.max(productRegular + (!customSizeSelected && dimensionSizeOptions.length > 0 ? dimensionPriceOffset : 0), variantSelling);
   const selling = variantSelling ?? productSelling;
   const hasDiscount = selling < regular;
   const percentOff = hasDiscount ? Math.round(((regular - selling) / regular) * 100) : 0;
@@ -349,27 +364,99 @@ const ProductDetails = () => {
     window.setTimeout(() => setAdded(false), 1800);
   };
 
+  const validateCustomSizeForm = () => {
+    const errors: Record<string, string> = {};
+
+    // 1. Length, Width, Height – Required, numeric, greater than 0
+    (["length", "width", "height"] as const).forEach((dim) => {
+      const val = customDimensions[dim]?.trim();
+      if (!val) {
+        errors[dim] = `${dim.charAt(0).toUpperCase() + dim.slice(1)} is required.`;
+      } else {
+        const num = Number(val);
+        if (!Number.isFinite(num) || num <= 0) {
+          errors[dim] = `${dim.charAt(0).toUpperCase() + dim.slice(1)} must be a positive number greater than 0.`;
+        } else if (num > 10000) {
+          errors[dim] = `${dim.charAt(0).toUpperCase() + dim.slice(1)} exceeds maximum limit (10,000 cm).`;
+        }
+      }
+    });
+
+    // 2. Unit – Required; validate against existing available options
+    if (!customUnit || customUnit !== "CM") {
+      errors.unit = "Unit must be CM.";
+    }
+
+    // 3. Additional Requirements – Optional, maximum character limit (1,000 chars)
+    if (additionalRequirements && additionalRequirements.length > 1000) {
+      errors.additional_requirements = `Additional requirements cannot exceed 1,000 characters (currently ${additionalRequirements.length}).`;
+    }
+
+
+
+    // 5. Product ID check
+    if (!product?.id) {
+      errors.productId = "Product is unavailable.";
+    }
+
+    setFieldErrors(errors);
+    return errors;
+  };
+
   const handleSubmitCustomSize = async () => {
     setCustomRequestState({ loading: false, message: "", error: false });
-    if (!customSizeIsValid) {
-      setCustomRequestState({ loading: false, message: "Enter a valid positive number for Length, Width, and Height.", error: true });
+
+    const errors = validateCustomSizeForm();
+    if (Object.keys(errors).length > 0) {
+      setCustomRequestState({
+        loading: false,
+        message: "Please resolve the highlighted field errors below.",
+        error: true,
+      });
       return;
     }
+
     if (!user || !token) {
-      sessionStorage.setItem("customSizeRequestDraft", JSON.stringify({ productId: id, dimensions: customDimensions }));
+      sessionStorage.setItem("customSizeRequestDraft", JSON.stringify({
+        productId: id,
+        dimensions: customDimensions,
+        unit: customUnit,
+        additionalRequirements,
+      }));
       sessionStorage.setItem("customSizeReturnTo", location.pathname);
       navigate("/login", { state: { returnTo: location.pathname } });
       return;
     }
 
+    // 9. Disable submit button while submitting to prevent duplicate requests
+    setCustomRequestState({ loading: true, message: "", error: false });
+
     try {
-      setCustomRequestState({ loading: true, message: "", error: false });
-      const response = await createCustomSizeRequest(token, { productId: product.id, ...customDimensions });
+      const response = await createCustomSizeRequest(token, {
+        productId: product.id,
+        ...customDimensions,
+        unit: customUnit,
+        additional_requirements: additionalRequirements || undefined,
+      });
+
       sessionStorage.removeItem("customSizeRequestDraft");
       sessionStorage.removeItem("customSizeReturnTo");
-      setCustomRequestState({ loading: false, message: `Request submitted. Your Request ID is ${response.data.request_id}.`, error: false });
-    } catch (error) {
-      setCustomRequestState({ loading: false, message: error instanceof Error ? error.message : "Could not submit the request. Please try again.", error: true });
+      setFieldErrors({});
+      setAdditionalRequirements("");
+      setCustomRequestState({
+        loading: false,
+        message: `Request submitted successfully! Your Request ID is ${response.data.request_id}. You can track it under My Custom Size Requests.`,
+        error: false,
+      });
+    } catch (error: any) {
+      if (error?.errors && typeof error.errors === "object") {
+        setFieldErrors(error.errors);
+      }
+      setCustomRequestState({
+        loading: false,
+        message: error instanceof Error ? error.message : "Could not submit the request. Please try again.",
+        error: true,
+      });
     }
   };
 
@@ -450,7 +537,6 @@ const ProductDetails = () => {
                     {dimensionSizeOptions.length > 0
                     ? dimensionSizeOptions.map((size) => {
                         const variant = sizeVariants.find((item) => normalizeDimensionLabel(getSizeVariantLabel(item)) === normalizeDimensionLabel(size));
-                        const variantPrice = getVariantSellingPrice(variant, productSelling);
                         const selected = normalizeDimensionLabel(size) === normalizeDimensionLabel(selectedDimensionOption ?? "");
                         return (
                           <button
@@ -467,7 +553,6 @@ const ProductDetails = () => {
                             }}
                           >
                             <span>{size}</span>
-                            {variantPrice != null && Number.isFinite(variantPrice) && <small>{inr(variantPrice)}</small>}
                           </button>
                         );
                       })
@@ -503,7 +588,7 @@ const ProductDetails = () => {
                   <div className="pd-custom-size-fields">
                     {(["length", "width", "height"] as const).map((dimension) => (
                       <label key={dimension}>
-                        <span>{dimension[0].toUpperCase() + dimension.slice(1)} (cm)</span>
+                        <span>{dimension[0].toUpperCase() + dimension.slice(1)} (cm) *</span>
                         <input
                           type="number"
                           min="1"
@@ -511,10 +596,64 @@ const ProductDetails = () => {
                           inputMode="decimal"
                           placeholder={`Enter ${dimension}`}
                           value={customDimensions[dimension]}
-                          onChange={(event) => setCustomDimensions((current) => ({ ...current, [dimension]: event.target.value }))}
+                          onChange={(event) => {
+                            const val = event.target.value;
+                            setCustomDimensions((current) => ({ ...current, [dimension]: val }));
+                            if (fieldErrors[dimension]) {
+                              setFieldErrors((curr) => {
+                                const next = { ...curr };
+                                delete next[dimension];
+                                return next;
+                              });
+                            }
+                          }}
+                          aria-invalid={Boolean(fieldErrors[dimension])}
+                          style={fieldErrors[dimension] ? { borderColor: "#b42318" } : undefined}
                         />
+                        {fieldErrors[dimension] && (
+                          <span style={{ color: "#b42318", fontSize: 11, fontWeight: 500, marginTop: 2 }}>
+                            {fieldErrors[dimension]}
+                          </span>
+                        )}
                       </label>
                     ))}
+
+                    <label style={{ gridColumn: "1 / -1" }}>
+                      <span>Additional Requirements (Optional, max 1,000 characters)</span>
+                      <textarea
+                        rows={2}
+                        maxLength={1000}
+                        placeholder="Mention any specific details (e.g. edge style, cut-outs, cable grommet position)..."
+                        value={additionalRequirements}
+                        onChange={(e) => {
+                          setAdditionalRequirements(e.target.value);
+                          if (fieldErrors.additional_requirements) {
+                            setFieldErrors((curr) => {
+                              const next = { ...curr };
+                              delete next.additional_requirements;
+                              return next;
+                            });
+                          }
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "8px 10px",
+                          border: fieldErrors.additional_requirements ? "1px solid #b42318" : "1px solid #d9d5ce",
+                          font: "inherit",
+                          fontSize: 13,
+                          boxSizing: "border-box",
+                        }}
+                      />
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
+                        {fieldErrors.additional_requirements ? (
+                          <span style={{ color: "#b42318", fontSize: 11, fontWeight: 500 }}>
+                            {fieldErrors.additional_requirements}
+                          </span>
+                        ) : <span />}
+                        <span style={{ fontSize: 11, color: "#8a857e" }}>{additionalRequirements.length}/1000</span>
+                      </div>
+                    </label>
+
                     <p>Enter your required dimensions in centimeters. We’ll include them with your order.</p>
                   </div>
                   <button type="button" className="pd-dark-btn pd-submit-custom-size" onClick={handleSubmitCustomSize} disabled={customRequestState.loading}>

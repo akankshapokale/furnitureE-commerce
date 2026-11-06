@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   Search,
@@ -91,13 +91,6 @@ interface SummaryCardProps {
   icon: LucideIcon;
   iconStyle: string;
   valueStyle?: string;
-  onClick: () => void;
-}
-
-interface SummaryModalState {
-  title: string;
-  orders: Order[];
-  amount: number;
 }
 
 interface TableHeadProps {
@@ -210,35 +203,9 @@ const Orders = () => {
   const [savingShipmentStage, setSavingShipmentStage] = useState(false);
   const [shipmentStageMessage, setShipmentStageMessage] = useState("");
   const [invoicePreviewOpen, setInvoicePreviewOpen] = useState(false);
-  const [summaryModal, setSummaryModal] = useState<SummaryModalState | null>(null);
-  const [ordersLoadError, setOrdersLoadError] = useState(false);
-  const filtersRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleOutsidePointer = (event: PointerEvent) => {
-      if (!filtersRef.current?.contains(event.target as Node)) {
-        setShowShipmentFilter(false);
-        setShowPaymentFilter(false);
-        setShowDatePicker(false);
-      }
-    };
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setShowShipmentFilter(false);
-        setShowPaymentFilter(false);
-        setShowDatePicker(false);
-      }
-    };
-    document.addEventListener("pointerdown", handleOutsidePointer);
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("pointerdown", handleOutsidePointer);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!selectedOrder && !summaryModal) return;
+    if (!selectedOrder) return;
 
     const html = document.documentElement;
     const body = document.body;
@@ -251,7 +218,6 @@ const Orders = () => {
       if (event.key === "Escape") {
         setInvoicePreviewOpen(false);
         setSelectedOrder(null);
-        setSummaryModal(null);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -261,7 +227,7 @@ const Orders = () => {
       body.style.overflow = previousBodyOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [selectedOrder, summaryModal]);
+  }, [selectedOrder]);
 
   const handleDownloadInvoice = async () => {
     if (!selectedOrder) return;
@@ -430,29 +396,27 @@ const Orders = () => {
   };
 
   const loadOrders = useCallback(async () => {
-    setOrdersLoadError(false);
-    const ordersPromise = getOrders()
-      .then((response) => {
-        setOrders(Array.isArray(response.data?.data) ? response.data.data : []);
-      })
-      .catch((error) => {
-        console.error("Failed to fetch orders:", error);
-        setOrders([]);
-        setOrdersLoadError(true);
-      })
-      .finally(() => setLoading(false));
+    setLoading(true);
+    const [ordersResult, shipmentsResult, paymentsResult] = await Promise.allSettled([getOrders(), getShipments(), getPayments()]);
 
-    const paymentsPromise = getPayments()
-      .then((response) => {
-        setPayments(Array.isArray(response.data?.data) ? response.data.data : []);
-      })
-      .catch(() => setPayments([]));
+    if (ordersResult.status === "fulfilled") {
+      setOrders(Array.isArray(ordersResult.value.data?.data) ? ordersResult.value.data.data : []);
+    } else {
+      console.error("Failed to fetch orders:", ordersResult.reason);
+      setOrders([]);
+    }
 
-    const shipmentsPromise = getShipments()
-      .then((response) => {
+    if (paymentsResult.status === "fulfilled") {
+      const records = Array.isArray(paymentsResult.value.data?.data) ? paymentsResult.value.data.data : [];
+      setPayments(records);
+    } else {
+      setPayments([]);
+    }
+
+    if (shipmentsResult.status === "fulfilled") {
       const latestByOrder: Record<string, string> = {};
       const detailByOrder: Record<string, ShipmentDetails> = {};
-      const shipments = Array.isArray(response.data?.data) ? response.data.data : [];
+      const shipments = Array.isArray(shipmentsResult.value.data?.data) ? shipmentsResult.value.data.data : [];
       for (const shipment of shipments) {
         const orderId = String(shipment.order_id);
         if (!latestByOrder[orderId]) {
@@ -462,13 +426,12 @@ const Orders = () => {
       }
       setShipmentStatuses(latestByOrder);
       setShipmentDetails(detailByOrder);
-      })
-      .catch(() => {
-        setShipmentStatuses({});
-        setShipmentDetails({});
-      });
+    } else {
+      setShipmentStatuses({});
+      setShipmentDetails({});
+    }
 
-    await Promise.all([ordersPromise, paymentsPromise, shipmentsPromise]);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -521,8 +484,7 @@ const Orders = () => {
       : (dateRange.start ? endOfDay(new Date()).getTime() : null);
     if (start === null && end === null) return orders;
     return orders.filter((order) => {
-      const orderTimestamp = order.order_number?.match(/^ORD[-_](\d{13})$/i)?.[1];
-      const created = orderTimestamp ? Number(orderTimestamp) : new Date(order.created_at).getTime();
+      const created = new Date(order.created_at).getTime();
       return Number.isFinite(created) && (start === null || created >= start) && (end === null || created <= end);
     });
   }, [orders, dateRange]);
@@ -597,7 +559,7 @@ const Orders = () => {
     setActiveDatePreset("Custom Range");
     if (!rangeAnchor) {
       setRangeAnchor(selected);
-      setDateRange({ start: selected, end: endOfDay(selected) });
+      setDateRange({ start: selected, end: null });
       return;
     }
 
@@ -631,18 +593,13 @@ const Orders = () => {
     URL.revokeObjectURL(url);
   };
 
-  const paymentAmountRemaining = (order: Order) =>
-    isCancelled(order) || isReturned(order) ? 0 : Math.max(0, amountOf(order) - paidAmountFor(order));
-  const openSummaryModal = (title: string, rows: Order[], amount: number) => {
-    setSummaryModal({ title, orders: rows, amount });
-  };
   const summaryCards: SummaryCardProps[] = [
-    { title: "Total Orders", value: periodOrders.length.toLocaleString("en-IN"), icon: ShoppingCart, iconStyle: "text-emerald-600", onClick: () => openSummaryModal("Total Orders", periodOrders, sumAmount(periodOrders)) },
-    { title: "Pending Orders", value: pendingOrders.length.toLocaleString("en-IN"), icon: Clock3, iconStyle: "text-amber-500", valueStyle: "text-amber-600", onClick: () => openSummaryModal("Pending Orders", pendingOrders, sumAmount(pendingOrders)) },
-    { title: "Paid Orders", value: paidOrders.length.toLocaleString("en-IN"), icon: CreditCard, iconStyle: "text-green-600", valueStyle: "text-green-600", onClick: () => openSummaryModal("Paid Orders", paidOrders, sumAmount(paidOrders)) },
-    { title: "Total Amount", value: inr(totalAmount), icon: Truck, iconStyle: "text-emerald-600", onClick: () => openSummaryModal("Total Amount", periodOrders, totalAmount) },
-    { title: "Pending Amount", value: inr(pendingAmount), icon: Clock3, iconStyle: "text-amber-500", valueStyle: "text-amber-600", onClick: () => openSummaryModal("Pending Amount", periodOrders.filter((order) => paymentAmountRemaining(order) > 0), pendingAmount) },
-    { title: "Amount Received", value: inr(receivedAmount), icon: CreditCard, iconStyle: "text-green-600", valueStyle: "text-green-600", onClick: () => openSummaryModal("Amount Received", periodOrders.filter((order) => paidAmountFor(order) > 0), receivedAmount) },
+    { title: "Total Orders", value: periodOrders.length.toLocaleString("en-IN"), icon: ShoppingCart, iconStyle: "text-emerald-600" },
+    { title: "Pending Orders", value: pendingOrders.length.toLocaleString("en-IN"), icon: Clock3, iconStyle: "text-amber-500", valueStyle: "text-amber-600" },
+    { title: "Paid Orders", value: paidOrders.length.toLocaleString("en-IN"), icon: CreditCard, iconStyle: "text-green-600", valueStyle: "text-green-600" },
+    { title: "Total Amount", value: inr(totalAmount), icon: Truck, iconStyle: "text-emerald-600" },
+    { title: "Pending Amount", value: inr(pendingAmount), icon: Clock3, iconStyle: "text-amber-500", valueStyle: "text-amber-600" },
+    { title: "Amount Received", value: inr(receivedAmount), icon: CreditCard, iconStyle: "text-green-600", valueStyle: "text-green-600" },
   ];
 
   return (
@@ -657,7 +614,7 @@ const Orders = () => {
           {summaryCards.map((card) => <SummaryCard key={card.title} {...card} />)}
         </section>
 
-        <section ref={filtersRef} className="mt-6 flex flex-col gap-3 xl:flex-row xl:items-center">
+        <section className="mt-6 flex flex-col gap-3 xl:flex-row xl:items-center">
           <div className="relative min-w-0 flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
@@ -670,7 +627,7 @@ const Orders = () => {
           </div>
 
           <div className="relative">
-            <button type="button" onClick={() => { setShowPaymentFilter(false); setShowDatePicker(false); setShowShipmentFilter((open) => !open); }} aria-expanded={showShipmentFilter} className="inline-flex h-11 min-w-52 items-center justify-between gap-3 border border-gray-200 bg-white px-4 text-sm text-slate-700 hover:bg-gray-50">
+            <button type="button" onClick={() => setShowShipmentFilter((open) => !open)} aria-expanded={showShipmentFilter} className="inline-flex h-11 min-w-52 items-center justify-between gap-3 border border-gray-200 bg-white px-4 text-sm text-slate-700 hover:bg-gray-50">
               <span>{statusFilter.length ? statusFilter.map((status) => shipmentStageLabel(status)).join(", ") : "All Shipment Statuses"}</span>
               <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
             </button>
@@ -688,7 +645,7 @@ const Orders = () => {
           </div>
 
           <div className="relative">
-            <button type="button" onClick={() => { setShowShipmentFilter(false); setShowDatePicker(false); setShowPaymentFilter((open) => !open); }} aria-expanded={showPaymentFilter} className="inline-flex h-11 min-w-52 items-center justify-between gap-3 border border-gray-200 bg-white px-4 text-sm text-slate-700 hover:bg-gray-50">
+            <button type="button" onClick={() => setShowPaymentFilter((open) => !open)} aria-expanded={showPaymentFilter} className="inline-flex h-11 min-w-52 items-center justify-between gap-3 border border-gray-200 bg-white px-4 text-sm text-slate-700 hover:bg-gray-50">
               <span>{paymentFilter.length ? paymentFilter.map((status) => status.split("_").map((word) => word[0].toUpperCase() + word.slice(1)).join(" ")).join(", ") : "All Payment Statuses"}</span>
               <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
             </button>
@@ -715,7 +672,7 @@ const Orders = () => {
           </div>
 
           <div className="relative">
-            <button type="button" onClick={() => { setShowShipmentFilter(false); setShowPaymentFilter(false); setShowDatePicker((open) => !open); }} aria-expanded={showDatePicker} className="inline-flex h-10 items-center gap-2 border border-green-200 bg-green-50 px-3 text-sm text-green-800 hover:bg-green-100">
+            <button type="button" onClick={() => setShowDatePicker((open) => !open)} aria-expanded={showDatePicker} className="inline-flex h-10 items-center gap-2 border border-green-200 bg-green-50 px-3 text-sm text-green-800 hover:bg-green-100">
               <CalendarDays className="h-3.5 w-3.5" /> {activeDatePreset}
             </button>
             {showDatePicker && (
@@ -779,8 +736,8 @@ const Orders = () => {
                   </div>
 
                   <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3">
-                    <p className="text-xs text-slate-500">{rangeAnchor ? "Choose an end date, or apply this single day." : "Select a day, or choose start and end dates."}</p>
-                    <div className="flex gap-2"><button type="button" onClick={() => { setDateRange({ start: null, end: null }); setRangeAnchor(null); setActiveDatePreset("All"); setShowDatePicker(false); }} className="border border-gray-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-gray-50">Clear</button><button type="button" onClick={() => { setRangeAnchor(null); setShowDatePicker(false); }} className="border border-green-700 bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800">Apply</button></div>
+                    <p className="text-xs text-slate-500">Select a start date, then an end date.</p>
+                    <button type="button" onClick={() => { setRangeAnchor(null); setShowDatePicker(false); }} className="border border-green-700 bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800">Apply</button>
                   </div>
                 </div>
               </div>
@@ -822,7 +779,7 @@ const Orders = () => {
                   const payment = order.payment_status?.toLowerCase() || "pending";
                   const status = order.status?.toLowerCase() || "pending";
                   const shipmentLabel = shipmentStageLabel(shipmentStatus);
-                  const date = formatOrderDateTime(order.created_at, "\u2014", order.order_number);
+                  const date = order.created_at ? new Date(order.created_at).toLocaleDateString("en-US") : "\u2014";
 
                   return (
                     <tr key={order.id} className="border-b border-gray-100 last:border-0">
@@ -1042,51 +999,6 @@ const Orders = () => {
         );
       })()}
 
-      {summaryModal && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) setSummaryModal(null); }}>
-          <div className="absolute inset-0 bg-slate-900/40 opacity-100 transition-opacity" />
-          <section role="dialog" aria-modal="true" aria-labelledby="orders-summary-title" className="relative flex max-h-[90vh] w-full max-w-6xl animate-[summary-modal-in_180ms_ease-out] flex-col border border-gray-200 bg-white shadow-2xl">
-            <header className="flex items-center justify-between gap-4 border-b border-gray-200 px-4 py-4 sm:px-6">
-              <div className="min-w-0">
-                <h2 id="orders-summary-title" className="truncate text-lg font-bold text-slate-900 sm:text-xl">{summaryModal.title}</h2>
-                <p className="mt-1 text-xs text-slate-500">{summaryModal.orders.length.toLocaleString("en-IN")} orders · {inr(summaryModal.amount)}</p>
-              </div>
-              <button type="button" aria-label="Close orders summary" onClick={() => setSummaryModal(null)} className="flex h-9 w-9 shrink-0 items-center justify-center text-slate-400 transition hover:bg-gray-100 hover:text-slate-800"><X className="h-5 w-5" /></button>
-            </header>
-            <div className="min-h-0 flex-1 overflow-auto">
-              <table className="w-full min-w-[980px] text-left">
-                <thead className="sticky top-0 z-10 bg-white"><tr className="border-b border-gray-200">
-                  {["Order ID", "Customer Name", "Product Name", "Amount", "Payment Status", "Order Status", "Shipment Status", "Order Date"].map((label) => <TableHead key={label}>{label}</TableHead>)}
-                </tr></thead>
-                <tbody>
-                  {loading ? <tr><td colSpan={8} className="px-5 py-12 text-center text-sm text-slate-500">Loading orders...</td></tr>
-                    : ordersLoadError ? <tr><td colSpan={8} className="px-5 py-12 text-center text-sm text-red-600">Orders could not be loaded. Please refresh and try again.</td></tr>
-                    : summaryModal.orders.length === 0 ? <tr><td colSpan={8} className="px-5 py-12 text-center text-sm text-slate-500">No orders found for this summary.</td></tr>
-                    : summaryModal.orders.map((order) => {
-                      const payStatus = (order.payment_status || "pending").toLowerCase();
-                      const orderStatus = (order.status || "pending").toLowerCase();
-                      const shipmentStatus = normalizeShipmentStage(shipmentStatuses[String(order.id)] || order.shipment_status || order.shipmentStatus || order.status);
-                      const productName = order.items?.map((item) => `${item.product_name || "Product"}${item.quantity ? ` × ${item.quantity}` : ""}`).join(", ") || order.product || "—";
-                      const date = formatOrderDateTime(order.created_at, "—", order.order_number);
-                      return <tr key={order.id} className="border-b border-gray-100 last:border-0 hover:bg-slate-50/50">
-                        <td className="whitespace-nowrap px-5 py-4 text-sm font-semibold text-slate-800">{order.order_number || order.id}</td>
-                        <td className="px-5 py-4 text-sm text-slate-700">{order.customer_name || order.customer || (order.user_id ? `User #${order.user_id}` : "Customer")}</td>
-                        <td className="max-w-[250px] px-5 py-4 text-sm text-slate-700"><span className="block truncate" title={productName}>{productName}</span></td>
-                        <td className="whitespace-nowrap px-5 py-4 text-sm font-semibold text-slate-900">{inr(amountOf(order))}</td>
-                        <td className="px-5 py-4"><span className={`inline-flex whitespace-nowrap px-2.5 py-1 text-xs font-semibold ${paymentStyles[payStatus] || "bg-gray-50 text-gray-600"}`}>{formatPaymentStatus(order.payment_status || "pending")}</span></td>
-                        <td className="px-5 py-4"><span className={`inline-flex whitespace-nowrap px-2.5 py-1 text-xs font-semibold ${statusStyles[orderStatus] || "bg-gray-50 text-gray-600"}`}>{formatStatus(order.status || "pending")}</span></td>
-                        <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-600">{shipmentStageLabel(shipmentStatus)}</td>
-                        <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-500">{date}</td>
-                      </tr>;
-                    })}
-                </tbody>
-              </table>
-            </div>
-            <footer className="border-t border-gray-100 px-4 py-3 text-xs text-slate-500 sm:px-6">Showing {summaryModal.orders.length.toLocaleString("en-IN")} orders</footer>
-          </section>
-        </div>
-      )}
-
     </div>
   );
 };
@@ -1097,10 +1009,9 @@ const SummaryCard = ({
   icon: Icon,
   iconStyle,
   valueStyle,
-  onClick,
 }: SummaryCardProps) => {
   return (
-    <button type="button" onClick={onClick} aria-label={`View ${title}`} className="min-w-0 cursor-pointer border border-gray-200 bg-white p-4 text-left transition duration-150 hover:-translate-y-0.5 hover:border-green-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:ring-offset-2 sm:p-5">
+    <div className="min-w-0 border border-gray-200 bg-white p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="min-h-8 whitespace-normal break-words text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500 sm:text-xs">{title}</p>
@@ -1108,7 +1019,7 @@ const SummaryCard = ({
         </div>
         <Icon className={`h-5 w-5 shrink-0 ${iconStyle}`} />
       </div>
-    </button>
+    </div>
   );
 };
 

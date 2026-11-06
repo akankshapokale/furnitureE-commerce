@@ -188,6 +188,7 @@ const ClientReviews = () => {
 
         {/* 3 Horizontal Cards (Equal Height for Both Sets) */}
         <div
+          className="home-reviews-grid"
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
@@ -198,6 +199,7 @@ const ClientReviews = () => {
           {displayedReviews.map((review) => (
             <article
               key={review.name}
+              className="home-review-card"
               style={{
                 background: "#ffffff",
                 border: "1px solid #e7e3dc",
@@ -253,6 +255,7 @@ const ClientReviews = () => {
 
               {/* Right Side: Details */}
               <div
+                className="home-review-content"
                 style={{
                   flex: 1,
                   minWidth: 0,
@@ -281,6 +284,7 @@ const ClientReviews = () => {
 
                   {/* 2. Headline in Black with gap below */}
                   <h3
+                    className="home-review-product"
                     style={{
                       margin: "0 0 8px",
                       fontSize: "13px",
@@ -297,6 +301,7 @@ const ClientReviews = () => {
 
                   {/* 3. Description without truncation or "..." */}
                   <p
+                    className="home-review-quote"
                     style={{
                       fontSize: "11.5px",
                       color: "#524d47",
@@ -310,6 +315,7 @@ const ClientReviews = () => {
 
                 {/* 4. Patron Name & Role */}
                 <div
+                  className="home-review-author"
                   style={{
                     display: "flex",
                     alignItems: "center",
