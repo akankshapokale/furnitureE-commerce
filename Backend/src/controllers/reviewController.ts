@@ -15,7 +15,7 @@ const parseRating = (value: unknown) => {
 export const getProductReviews = async (req: Request, res: Response) => {
   try {
     const reviews = await pool.query(
-      `SELECT id, reviewer_name, rating, title, comment, is_verified_purchase, created_at
+      `SELECT id, reviewer_name, rating, title, comment, image_url, is_verified_purchase, created_at
        FROM product_reviews
        WHERE product_id = $1 AND status = 'approved'
        ORDER BY created_at DESC, id DESC`,
@@ -138,12 +138,23 @@ export const createStaffReview = async (req: Request, res: Response) => {
   const name = text(req.body?.reviewer_name);
   const rating = parseRating(req.body?.rating);
   const status = text(req.body?.status) ?? "approved";
+  const comment = text(req.body?.comment);
+  const rawImageUrl = req.body?.image_url;
+  const imageUrl = typeof rawImageUrl === "string" && rawImageUrl.trim() ? rawImageUrl.trim() : null;
+  const rawCreatedAt = req.body?.created_at;
+  const createdAt = rawCreatedAt === undefined || rawCreatedAt === null || rawCreatedAt === "" ? null : new Date(rawCreatedAt);
 
-  if (!Number.isInteger(productId) || !name || !rating) {
+  if (!Number.isInteger(productId) || !name || !rating || !comment) {
     return res.status(400).json({
       success: false,
-      message: "Product, reviewer name and a rating from 1 to 5 are required",
+      message: "Product, customer name, review description and a rating from 1 to 5 are required",
     });
+  }
+  if (rawImageUrl !== undefined && rawImageUrl !== null && rawImageUrl !== "" && (typeof rawImageUrl !== "string" || rawImageUrl.length > 2048)) {
+    return res.status(400).json({ success: false, message: "Customer image URL is invalid" });
+  }
+  if (rawCreatedAt !== undefined && rawCreatedAt !== null && rawCreatedAt !== "" && Number.isNaN(createdAt?.getTime())) {
+    return res.status(400).json({ success: false, message: "Review date is invalid" });
   }
   if (!STATUSES.includes(status)) {
     return res.status(400).json({ success: false, message: "Invalid status" });
@@ -152,17 +163,19 @@ export const createStaffReview = async (req: Request, res: Response) => {
   try {
     const result = await pool.query(
       `INSERT INTO product_reviews
-         (product_id, reviewer_name, rating, title, comment, is_verified_purchase, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+         (product_id, reviewer_name, rating, title, comment, image_url, is_verified_purchase, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamp, CURRENT_TIMESTAMP))
        RETURNING *`,
       [
         productId,
         name,
         rating,
         text(req.body?.title),
-        text(req.body?.comment),
+        comment,
+        imageUrl,
         req.body?.is_verified_purchase === true,
         status,
+        createdAt,
       ]
     );
 
@@ -180,6 +193,11 @@ export const createStaffReview = async (req: Request, res: Response) => {
 export const updateReview = async (req: Request, res: Response) => {
   const rating = req.body?.rating === undefined ? null : parseRating(req.body.rating);
   const status = text(req.body?.status);
+  const imageProvided = Object.prototype.hasOwnProperty.call(req.body ?? {}, "image_url");
+  const rawImageUrl = req.body?.image_url;
+  const imageUrl = typeof rawImageUrl === "string" && rawImageUrl.trim() ? rawImageUrl.trim() : null;
+  const rawCreatedAt = req.body?.created_at;
+  const createdAt = rawCreatedAt === undefined || rawCreatedAt === null || rawCreatedAt === "" ? null : new Date(rawCreatedAt);
 
   if (req.body?.rating !== undefined && !rating) {
     return res.status(400).json({ success: false, message: "Rating must be from 1 to 5" });
@@ -187,20 +205,31 @@ export const updateReview = async (req: Request, res: Response) => {
   if (status && !STATUSES.includes(status)) {
     return res.status(400).json({ success: false, message: "Invalid status" });
   }
+  if (imageProvided && rawImageUrl !== undefined && rawImageUrl !== null && rawImageUrl !== "" && (typeof rawImageUrl !== "string" || rawImageUrl.length > 2048)) {
+    return res.status(400).json({ success: false, message: "Customer image URL is invalid" });
+  }
+  if (rawCreatedAt !== undefined && rawCreatedAt !== null && rawCreatedAt !== "" && Number.isNaN(createdAt?.getTime())) {
+    return res.status(400).json({ success: false, message: "Review date is invalid" });
+  }
 
   try {
     const result = await pool.query(
       `UPDATE product_reviews SET
-         reviewer_name = COALESCE($1, reviewer_name),
-         rating = COALESCE($2, rating),
-         title = CASE WHEN $3::boolean THEN $4 ELSE title END,
-         comment = CASE WHEN $5::boolean THEN $6 ELSE comment END,
-         is_verified_purchase = COALESCE($7, is_verified_purchase),
-         status = COALESCE($8, status),
+         image_url = CASE WHEN $1::boolean THEN $2 ELSE image_url END,
+         created_at = COALESCE($3::timestamp, created_at),
+         reviewer_name = COALESCE($4, reviewer_name),
+         rating = COALESCE($5, rating),
+         title = CASE WHEN $6::boolean THEN $7 ELSE title END,
+         comment = CASE WHEN $8::boolean THEN $9 ELSE comment END,
+         is_verified_purchase = COALESCE($10, is_verified_purchase),
+         status = COALESCE($11, status),
          updated_at = NOW()
-       WHERE id = $9
+       WHERE id = $12
        RETURNING *`,
       [
+        imageProvided,
+        imageUrl,
+        createdAt,
         text(req.body?.reviewer_name),
         rating,
         req.body?.title !== undefined,

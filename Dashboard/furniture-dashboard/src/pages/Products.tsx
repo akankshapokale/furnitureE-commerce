@@ -20,6 +20,7 @@ import {
   type ProductRecord,
 } from "../services/api";
 import { formatINR, discountPercent, stockState, availableStock } from "../components/products/helpers";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 
 const STATUS_STYLES: Record<string, string> = {
   active: "bg-green-50 text-green-700",
@@ -41,6 +42,7 @@ const Products = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(() => (location.state as { notice?: string } | null)?.notice || "");
+  const [deleteTarget, setDeleteTarget] = useState<ProductRecord | null>(null);
 
   const [search, setSearch] = useState("");
   const [categoryFilter] = useState("all");
@@ -132,8 +134,6 @@ const Products = () => {
   };
 
   const remove = async (product: ProductRecord) => {
-    if (!window.confirm(`Delete "${product.name}"? Products linked to existing records will be archived to preserve those records.`)) return;
-
     try {
       const response = await deleteProduct(product.id);
       if (response.data.data?.archived) {
@@ -158,6 +158,7 @@ const Products = () => {
 
   return (
     <div className="min-h-screen min-w-0 bg-white">
+      {deleteTarget && <ConfirmDialog title="Delete product?" message={`Delete "${deleteTarget.name}"? Products linked to existing records will be archived to preserve those records.`} onCancel={() => setDeleteTarget(null)} onConfirm={() => { const target = deleteTarget; setDeleteTarget(null); void remove(target); }} />}
       <div className="min-w-0 space-y-5 p-4 sm:p-6 lg:p-8">
 
         {/* Header */}
@@ -278,7 +279,7 @@ const Products = () => {
                     <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-4 py-3">
                       <div className="flex shrink-0 items-center gap-2">
                         <Link to={`/products/${product.id}`} state={{ backgroundLocation: location }} className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50" aria-label={`Edit ${product.name}`}><Pencil size={13} /> Edit</Link>
-                        <button type="button" onClick={() => remove(product)} className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600" aria-label={`Delete ${product.name}`}><Trash2 size={13} /> Delete</button>
+                        <button type="button" onClick={() => setDeleteTarget(product)} className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600" aria-label={`Delete ${product.name}`}><Trash2 size={13} /> Delete</button>
                       </div>
                     </div>
                   </article>

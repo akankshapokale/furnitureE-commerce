@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, Loader2, Save, Trash2 } from "lucide-react";
 import { API_BASE_URL, TOKEN_KEY } from "../../services/api";
+import ConfirmDialog from "../common/ConfirmDialog";
 
 type Row = { content_key: string; content: Record<string, unknown>; is_published: boolean };
 const sections = [
@@ -26,6 +27,7 @@ export default function ContentPagesManager({ onToast }: { onToast: (msg: string
   const [published, setPublished] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,7 +76,6 @@ export default function ContentPagesManager({ onToast }: { onToast: (msg: string
   };
 
   const remove = async () => {
-    if (!window.confirm("Delete this content section? It will no longer appear on the storefront.")) return;
     try {
       const r = await fetch(`${API_BASE_URL}/website-content/${key}`, { method: "DELETE", headers: { Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY) ?? ""}` } });
       const d = await r.json();
@@ -85,12 +86,13 @@ export default function ContentPagesManager({ onToast }: { onToast: (msg: string
   };
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-7 w-7 animate-spin text-green-600" /></div>;
   return <section className="max-w-4xl space-y-4">
+    {confirmDelete && <ConfirmDialog title="Delete content section?" message="It will no longer appear on the storefront." onCancel={() => setConfirmDelete(false)} onConfirm={() => { setConfirmDelete(false); void remove(); }} />}
     <p className="text-sm text-slate-600">Manage publishable page copy and links. Edit each section as a JSON object; arrays hold repeated items such as testimonials and footer links. The preview below shows the saved structure.</p>
     <label className="block text-sm font-semibold text-slate-700">Section<select className={input + " mt-1"} value={key} onChange={(e) => setKey(e.target.value)}>{sections.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
     {error && <p role="alert" className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700"><AlertCircle size={16} />{error}</p>}
     <label className="block text-sm font-semibold text-slate-700">Content JSON<textarea className={input + " mt-1 font-mono text-xs"} rows={20} spellCheck={false} value={json} onChange={(e) => setJson(e.target.value)} /></label>
     <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={published} onChange={(e) => setPublished(e.target.checked)} /> Published on storefront</label>
-    <div className="flex flex-wrap gap-2"><button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}Save changes</button>{rows[key] && <button onClick={remove} className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50"><Trash2 size={16} />Delete section</button>}</div>
+    <div className="flex flex-wrap gap-2"><button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}Save changes</button>{rows[key] && <button onClick={() => setConfirmDelete(true)} className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50"><Trash2 size={16} />Delete section</button>}</div>
     <div className="rounded-xl border border-gray-200 bg-white p-4"><h2 className="text-sm font-semibold text-slate-800">Content preview</h2><pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words text-xs text-slate-600">{json}</pre></div>
   </section>;
 }

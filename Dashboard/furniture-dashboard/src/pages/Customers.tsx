@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { isAxiosError } from "axios";
 import { createCustomer, deleteUser, getOrders, getPayments, getUsers, updateUser } from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 import {
   Search,
   Plus,
@@ -79,6 +80,7 @@ const Customers = () => {
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [savingCustomer, setSavingCustomer] = useState(false);
   const [formError, setFormError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
 
   const fetchCustomers = useCallback(async (showLoading = false) => {
     try {
@@ -226,7 +228,6 @@ const Customers = () => {
 
   const handleDeleteCustomer = async (customer: Customer) => {
     if (!isAdmin) return;
-    if (!window.confirm(`Delete customer "${customer.name}"?`)) return;
 
     try {
       await deleteUser(customer.id);
@@ -349,6 +350,7 @@ const Customers = () => {
 
   return (
     <div className="min-h-screen bg-white">
+      {deleteTarget && <ConfirmDialog title="Delete customer?" message={`Delete customer "${deleteTarget.name}"?`} onCancel={() => setDeleteTarget(null)} onConfirm={() => { const target = deleteTarget; setDeleteTarget(null); void handleDeleteCustomer(target); }} />}
       <div className="p-4 sm:p-6 lg:p-8">
 
         {/* Header */}
@@ -660,7 +662,7 @@ const Customers = () => {
                                   type="button"
                                   title={`Delete ${customer.name}`}
                                   aria-label={`Delete ${customer.name}`}
-                                  onClick={() => void handleDeleteCustomer(customer)}
+                                  onClick={() => setDeleteTarget(customer)}
                                   className="inline-flex h-8 w-8 items-center justify-center text-slate-400 transition hover:bg-red-50 hover:text-red-600"
                                 >
                                   <Trash2 className="h-4 w-4" />

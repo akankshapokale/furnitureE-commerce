@@ -9,6 +9,7 @@ import {
   type PersonPayload,
 } from "../services/api";
 import { PAGES } from "../config/permissions";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 
 interface Person {
   id: number;
@@ -59,6 +60,7 @@ const People = ({ title = "Team Management", staffView = false }: { title?: stri
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [notice, setNotice] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Person | null>(null);
 
   const fetchPeople = useCallback(async () => {
     try {
@@ -158,8 +160,6 @@ const People = ({ title = "Team Management", staffView = false }: { title?: stri
   };
 
   const handleDelete = async (person: Person) => {
-    if (!window.confirm(`Delete ${person.name}? This cannot be undone.`)) return;
-
     try {
       await deletePerson(person.id);
       setPeople((current) => current.filter((p) => p.id !== person.id));
@@ -193,6 +193,7 @@ const People = ({ title = "Team Management", staffView = false }: { title?: stri
 
   return (
     <div className="min-h-screen bg-white">
+      {deleteTarget && <ConfirmDialog title="Delete team member?" message={`Delete ${deleteTarget.name}? This cannot be undone.`} onCancel={() => setDeleteTarget(null)} onConfirm={() => { const target = deleteTarget; setDeleteTarget(null); void handleDelete(target); }} />}
       <div className="p-4 sm:p-6 lg:p-8">
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -344,7 +345,7 @@ const People = ({ title = "Team Management", staffView = false }: { title?: stri
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDelete(person)}
+                          onClick={() => setDeleteTarget(person)}
                           aria-label={`Delete ${person.name}`}
                           className="flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50"
                         >

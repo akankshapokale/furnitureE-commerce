@@ -1482,6 +1482,10 @@
   color: #273444;
 }
 
+.pd-avatar-image {
+  object-fit: cover;
+}
+
 .pd-review-head strong {
   display: block;
   font-size: 14.5px;

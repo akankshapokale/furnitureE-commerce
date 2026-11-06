@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, CreditCard, Download, Eye, Search, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CalendarDays, CheckCircle2, Clock3, CreditCard, Download, Eye, Search, X } from "lucide-react";
 import { getOrders, getPayments } from "../services/api";
+import DateRangeCalendar from "../components/common/DateRangeCalendar";
 
 interface RefundPayment {
   id: number;
@@ -25,7 +26,7 @@ interface RefundOrder {
   items?: { product_name?: string; quantity?: number | string; total_price?: number | string }[];
 }
 const refundStatuses = new Set(["refunded", "partially_refunded", "refund_pending", "refund_processing", "refund_failed", "refund_initiated"]);
-const money = (value: number | string | undefined) => `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const money = (value: number | string | undefined) => `â‚¹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const statusLabel = (value?: string | null) => (value || "Unknown").replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 const providerFor = (value?: string | null) => {
   if (/cod|cash on delivery/i.test(value || "")) return "COD";
@@ -43,11 +44,7 @@ const refundStatusFor = (value?: string | null) => {
 };
 const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 const endOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
-const calendarDays = (month: Date) => {
-  const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
-  const start = new Date(month.getFullYear(), month.getMonth(), 1 - firstDay.getDay());
-  return Array.from({ length: 42 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
-};
+const MAX_CUSTOM_RANGE_DAYS = 62;
 const typeFor = (payment: RefundPayment, order?: RefundOrder) => {
   const amount = Number(payment.amount || 0);
   const total = Number(order?.total_amount || 0);
@@ -67,6 +64,7 @@ const PaymentsRefunds = () => {
   const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
   const [activeDatePreset, setActiveDatePreset] = useState("All dates");
   const [dateOpen, setDateOpen] = useState(false);
+  const datePickerRef = useRef<HTMLDivElement>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1));
   const [rangeAnchor, setRangeAnchor] = useState<Date | null>(null);
   const [selected, setSelected] = useState<RefundPayment | null>(null);
@@ -130,7 +128,8 @@ const PaymentsRefunds = () => {
   const chooseCalendarDate = (day: Date) => {
     const selectedDay = startOfDay(day);
     setActiveDatePreset("Custom Range");
-    if (!rangeAnchor) { setRangeAnchor(selectedDay); setDateRange({ start: selectedDay, end: null }); return; }
+    if (!rangeAnchor) { setRangeAnchor(selectedDay); setDateRange({ start: selectedDay, end: endOfDay(selectedDay) }); return; }
+    if (Math.abs(selectedDay.getTime() - rangeAnchor.getTime()) / 86_400_000 >= MAX_CUSTOM_RANGE_DAYS) { setRangeAnchor(selectedDay); setDateRange({ start: selectedDay, end: endOfDay(selectedDay) }); return; }
     const start = selectedDay < rangeAnchor ? selectedDay : rangeAnchor;
     const end = selectedDay < rangeAnchor ? rangeAnchor : selectedDay;
     setDateRange({ start, end });
@@ -139,7 +138,7 @@ const PaymentsRefunds = () => {
   const stats = [{ title: "Total Refunds", value: refundPayments.length, icon: CreditCard, color: "text-green-700" }, { title: "Total Amount", value: money(totalAmount), icon: CheckCircle2, color: "text-slate-900" }];
   return <div className="min-h-screen bg-white p-4 sm:p-6 lg:p-8">
     <header><h1 className="text-2xl font-bold text-slate-900">Refunds</h1><p className="mt-1 text-sm text-slate-500">Track payment reversals and refund statuses</p></header>
-    <section className="mt-6 grid gap-4 md:grid-cols-2">{stats.map(({ title, value, icon: Icon, color }) => <article key={title} className="border border-gray-200 bg-white p-5"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p><p className={`mt-2 text-3xl font-bold ${color}`}>{loading ? "—" : typeof value === "number" ? value.toLocaleString("en-IN") : value}</p></div><Icon className="h-5 w-5 text-green-700" /></div></article>)}</section>
+    <section className="mt-6 grid gap-4 md:grid-cols-2">{stats.map(({ title, value, icon: Icon, color }) => <article key={title} className="border border-gray-200 bg-white p-5"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p><p className={`mt-2 text-3xl font-bold ${color}`}>{loading ? "â€”" : typeof value === "number" ? value.toLocaleString("en-IN") : value}</p></div><Icon className="h-5 w-5 text-green-700" /></div></article>)}</section>
     {pendingCount > 0 && <div className="mt-6 flex items-center gap-3 border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800"><Clock3 className="h-5 w-5 shrink-0 text-amber-600" /><span>{pendingCount} refunds need review. Open a row to inspect payment and order details.</span></div>}
     <section className="mt-6 flex flex-col gap-3 xl:flex-row xl:items-center">
       <label className="relative min-w-0 flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Customer name/email/phone, order or refund reference" className="h-11 w-full border border-gray-200 bg-white pl-10 pr-3 text-sm outline-none focus:border-green-600" /></label>
@@ -147,7 +146,26 @@ const PaymentsRefunds = () => {
       <select value={provider} onChange={(event) => setProvider(event.target.value)} className="h-11 border border-gray-200 bg-white px-3 text-sm"><option value="all">All Providers</option>{providers.map((value) => <option key={value}>{value}</option>)}</select>
       <select value={method} onChange={(event) => setMethod(event.target.value)} className="h-11 border border-gray-200 bg-white px-3 text-sm"><option value="all">All Refund Methods</option><option value="Bank Account">Bank Account</option><option value="UPI">UPI</option></select>
       <select value={type} onChange={(event) => setType(event.target.value)} className="h-11 border border-gray-200 bg-white px-3 text-sm"><option value="all">Full &amp; Partial</option><option value="full">FULL</option><option value="partial">PARTIAL</option></select>
-      <div className="relative"><button type="button" onClick={() => setDateOpen((open) => !open)} aria-expanded={dateOpen} className="inline-flex h-11 items-center gap-2 border border-green-200 bg-green-50 px-4 text-sm text-green-800 hover:bg-green-100"><CalendarDays className="h-4 w-4" />{activeDatePreset}</button>{dateOpen && <div className="absolute right-0 top-full z-50 mt-2 flex w-[min(94vw,790px)] flex-col border border-gray-200 bg-white shadow-xl sm:flex-row"><aside className="w-full shrink-0 border-b border-gray-200 p-3 sm:w-36 sm:border-b-0 sm:border-r"><p className="mb-2 px-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Quick Ranges</p>{["Today", "This Week", "This Month", "Last Month", "Last 30 Days", "All"].map((preset) => <button key={preset} type="button" onClick={() => applyQuickRange(preset)} className={`mb-1 w-full px-2.5 py-2 text-left text-sm ${activeDatePreset === (preset === "All" ? "All dates" : preset) ? "bg-green-50 font-semibold text-green-800" : "text-slate-600 hover:bg-gray-50"}`}>{preset}</button>)}</aside><div className="min-w-0 flex-1 p-3 sm:p-4"><div className="mb-3 flex items-center justify-between"><button type="button" aria-label="Previous month" onClick={() => setCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="flex h-9 w-9 items-center justify-center border border-gray-200 text-slate-600 hover:bg-gray-50"><ChevronLeft className="h-4 w-4" /></button><div className="grid flex-1 grid-cols-2 text-center text-sm font-semibold text-slate-800"><span>{calendarMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span><span className="hidden sm:block">{new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span></div><button type="button" aria-label="Next month" onClick={() => setCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="flex h-9 w-9 items-center justify-center border border-gray-200 text-slate-600 hover:bg-gray-50"><ChevronRight className="h-4 w-4" /></button></div><div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{[calendarMonth, new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1)].map((month) => <div key={`${month.getFullYear()}-${month.getMonth()}`} className="hidden sm:block"><div className="mb-1 grid grid-cols-7 text-center text-xs font-medium text-slate-400">{["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((weekday) => <span key={weekday} className="py-2">{weekday}</span>)}</div><div className="grid grid-cols-7 gap-y-1">{calendarDays(month).map((calendarDay) => { const dayTime = startOfDay(calendarDay).getTime(); const rangeStart = dateRange.start?.getTime(); const rangeEnd = dateRange.end ? startOfDay(dateRange.end).getTime() : rangeStart; const inRange = rangeStart != null && rangeEnd != null && dayTime >= Math.min(rangeStart, rangeEnd) && dayTime <= Math.max(rangeStart, rangeEnd); const isBoundary = dayTime === rangeStart || dayTime === rangeEnd; const disabled = dayTime > startOfDay(new Date()).getTime(); return <button key={calendarDay.toISOString()} type="button" disabled={disabled} onClick={() => chooseCalendarDate(calendarDay)} className={`h-9 text-sm ${calendarDay.getMonth() !== month.getMonth() ? "text-slate-300" : "text-slate-700"} ${inRange ? "bg-green-50" : ""} ${isBoundary ? "bg-green-700 font-semibold text-white" : "hover:bg-gray-100"} disabled:cursor-not-allowed disabled:opacity-40`}>{calendarDay.getDate()}</button>; })}</div></div>)}<div className="sm:hidden"><div className="mb-1 grid grid-cols-7 text-center text-xs font-medium text-slate-400">{["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((weekday) => <span key={weekday} className="py-2">{weekday}</span>)}</div><div className="grid grid-cols-7 gap-y-1">{calendarDays(calendarMonth).map((calendarDay) => { const dayTime = startOfDay(calendarDay).getTime(); const rangeStart = dateRange.start?.getTime(); const rangeEnd = dateRange.end ? startOfDay(dateRange.end).getTime() : rangeStart; const inRange = rangeStart != null && rangeEnd != null && dayTime >= Math.min(rangeStart, rangeEnd) && dayTime <= Math.max(rangeStart, rangeEnd); const isBoundary = dayTime === rangeStart || dayTime === rangeEnd; const disabled = dayTime > startOfDay(new Date()).getTime(); return <button key={calendarDay.toISOString()} type="button" disabled={disabled} onClick={() => chooseCalendarDate(calendarDay)} className={`h-9 text-sm ${calendarDay.getMonth() !== calendarMonth.getMonth() ? "text-slate-300" : "text-slate-700"} ${inRange ? "bg-green-50" : ""} ${isBoundary ? "bg-green-700 font-semibold text-white" : "hover:bg-gray-100"} disabled:cursor-not-allowed disabled:opacity-40`}>{calendarDay.getDate()}</button>; })}</div></div></div><div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3"><p className="text-xs text-slate-500">Select a start date, then an end date.</p><button type="button" onClick={() => { setRangeAnchor(null); setDateOpen(false); }} className="border border-green-700 bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800">Apply</button></div></div></div>}</div>
+      <div ref={datePickerRef} className="relative">
+        <button type="button" onClick={() => setDateOpen((open) => !open)} aria-expanded={dateOpen} className="inline-flex h-10 items-center gap-2 border border-green-200 bg-green-50 px-3 text-sm text-green-800 hover:bg-green-100">
+          <CalendarDays className="h-3.5 w-3.5" /> {activeDatePreset}
+        </button>
+        {dateOpen && <div className="absolute right-0 top-full z-50 mt-2 flex w-[min(94vw,790px)] flex-col border border-gray-200 bg-white shadow-xl sm:flex-row">
+          <aside className="w-full shrink-0 border-b border-gray-200 p-3 sm:w-36 sm:border-b-0 sm:border-r">
+            <p className="mb-2 px-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Quick Ranges</p>
+            {["Today", "This Week", "This Month", "Last Month", "Last 30 Days", "All"].map((preset) => <button key={preset} type="button" onClick={() => applyQuickRange(preset)} className={`mb-1 w-full px-2.5 py-2 text-left text-sm ${activeDatePreset === (preset === "All" ? "All dates" : preset) ? "bg-green-50 font-semibold text-green-800" : "text-slate-600 hover:bg-gray-50"}`}>{preset}</button>)}
+          </aside>
+          <DateRangeCalendar
+            calendarMonth={calendarMonth}
+            dateRange={dateRange}
+            rangeAnchor={rangeAnchor}
+            onMonthChange={setCalendarMonth}
+            onChooseDate={chooseCalendarDate}
+            onClear={() => { setDateRange({ start: null, end: null }); setRangeAnchor(null); setActiveDatePreset("All dates"); setDateOpen(false); }}
+            onApply={() => { setRangeAnchor(null); setDateOpen(false); }}
+          />
+        </div>}
+      </div>
       <button type="button" onClick={exportCsv} disabled={!filtered.length} className="inline-flex h-11 items-center justify-center gap-2 bg-green-700 px-4 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-50"><Download className="h-4 w-4" />Export CSV</button>
     </section>
     {error && <div className="mt-4 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}

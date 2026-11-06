@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Download, IndianRupee, Package, ShoppingCart, Users, Wallet } from "lucide-react";
-import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { getOrders, getPayments, getProducts, getUsers } from "../services/api";
+import MonthlySalesChart from "../components/dashboard/MonthlySalesChart";
 
 interface Order { id: number; order_number?: string; status: string; payment_status?: string; total_amount: number | string; created_at: string; }
 interface Payment { payment_status?: string; amount: number | string; payment_date?: string; created_at?: string; }
@@ -93,18 +94,18 @@ const Reports = () => {
   };
 
   const cards = [
-    { label: "Sales revenue", value: inr(report.revenue), icon: IndianRupee },
-    { label: "Revenue collected", value: inr(report.collected), icon: Wallet },
-    { label: "Orders", value: report.sales.length.toLocaleString("en-IN"), icon: ShoppingCart },
-    { label: "Customers", value: data.customers.length.toLocaleString("en-IN"), icon: Users },
-    { label: "Products", value: data.products.length.toLocaleString("en-IN"), icon: Package },
+    { label: "Sales revenue", value: inr(report.revenue), icon: IndianRupee, to: "/sales" },
+    { label: "Revenue collected", value: inr(report.collected), icon: Wallet, to: "/payments" },
+    { label: "Orders", value: report.sales.length.toLocaleString("en-IN"), icon: ShoppingCart, to: "/orders" },
+    { label: "Customers", value: data.customers.length.toLocaleString("en-IN"), icon: Users, to: "/customers" },
+    { label: "Products", value: data.products.length.toLocaleString("en-IN"), icon: Package, to: "/products" },
   ];
 
   return <div className="min-h-screen bg-white p-4 sm:p-5 lg:p-6 xl:p-8">
     <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="text-2xl font-bold text-slate-900 sm:text-[28px]">Reports</h1><p className="mt-1 text-sm text-slate-500">Business performance from your store data</p></div><div className="flex gap-3"><select value={days} onChange={(event) => setDays(Number(event.target.value))} className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm">{ranges.map((range) => <option key={range.label} value={range.days}>{range.label}</option>)}</select><button type="button" onClick={exportCsv} disabled={!report.selected.length || loading} className="inline-flex h-10 items-center gap-2 rounded-lg bg-green-600 px-4 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"><Download size={16}/> Export</button></div></div>
     {error && <div className="mt-5 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><span>{error}</span><button type="button" onClick={() => void load()} className="shrink-0 font-semibold underline">Retry</button></div>}
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">{cards.map(({ label, value, icon: Icon }) => <div key={label} className="min-w-0 border border-gray-200 bg-white p-4 sm:p-5"><div className="flex items-start justify-between gap-3"><p className="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">{label}</p><Icon className="h-5 w-5 text-green-600"/></div><p className="mt-2 text-2xl font-bold text-slate-900 sm:text-[28px]">{loading ? "—" : value}</p></div>)}</div>
-    <div className="mt-6 grid items-stretch gap-3 lg:grid-cols-[2fr_1fr]"><div className="min-w-0 border border-gray-200 bg-white p-4 sm:p-5"><h2 className="font-bold text-slate-900">Sales, payments and orders by month</h2><p className="mt-1 text-sm text-slate-500">Order totals, successful payments, and order count for the selected period</p>{loading ? <p className="py-20 text-center text-sm text-slate-500">Loading report…</p> : report.chart.length ? <div className="mt-5 h-72"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={report.chart}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="month"/><YAxis yAxisId="money" tickFormatter={(value) => `₹${Number(value) >= 1000 ? `${Math.round(Number(value) / 1000)}k` : value}`}/><YAxis yAxisId="orders" orientation="right" allowDecimals={false}/><Tooltip formatter={(value, name) => name === "Orders" ? Number(value).toLocaleString("en-IN") : inr(Number(value))}/><Bar yAxisId="money" dataKey="sales" name="Sales" fill="#16a34a" radius={[5,5,0,0]}/><Bar yAxisId="money" dataKey="collected" name="Collected" fill="#3b82f6" radius={[5,5,0,0]}/><Line yAxisId="orders" dataKey="orders" name="Orders" stroke="#8b5cf6" strokeWidth={2} type="monotone"/></ComposedChart></ResponsiveContainer></div> : <p className="py-20 text-center text-sm text-slate-500">No orders in this period.</p>}</div>
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">{cards.map(({ label, value, icon: Icon, to }) => <Link key={label} to={to} aria-label={`Open ${label} page`} className="min-w-0 border border-gray-200 bg-white p-4 transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 sm:p-5"><div className="flex items-start justify-between gap-3"><p className="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">{label}</p><Icon className="h-5 w-5 text-green-600"/></div><p className="mt-2 text-2xl font-bold text-slate-900 sm:text-[28px]">{loading ? "—" : value}</p></Link>)}</div>
+    <div className="mt-6 grid items-stretch gap-3 lg:grid-cols-[2fr_1fr]"><div className="min-w-0 border border-gray-200 bg-white p-4 sm:p-5"><h2 className="text-lg font-bold text-slate-900">Sales, payments and orders by month</h2><p className="mt-1 text-xs text-slate-500">Order totals and successful payments for the selected period</p>{loading ? <p className="py-20 text-center text-sm text-slate-500">Loading report…</p> : report.chart.length ? <MonthlySalesChart data={report.chart} /> : <p className="py-20 text-center text-sm text-slate-500">No orders in this period.</p>}</div>
       <div className="min-w-0 border border-gray-200 bg-white p-4 sm:p-5"><h2 className="font-bold text-slate-900">Order status</h2><p className="mt-1 text-sm text-slate-500">Selected period</p><div className="mt-4 space-y-3">{report.statuses.length ? report.statuses.map(({ status, count }) => <div key={status} className="flex items-center justify-between border-b border-gray-100 pb-3 text-sm"><span className="capitalize text-slate-600">{status.replace(/_/g, " ")}</span><span className="font-semibold text-slate-900">{count}</span></div>) : <p className="py-8 text-center text-sm text-slate-500">No orders in this period.</p>}</div></div>
     </div>
   </div>;

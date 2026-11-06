@@ -6,6 +6,7 @@ import {
   CircleCheck,
   RotateCcw,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 interface OverviewCardProps {
   title: string;
@@ -43,7 +44,8 @@ const OverviewCard = ({ title, value, hint }: OverviewCardProps) => {
   const Icon = cardData[title]?.icon || Package;
 
   return (
-    <div
+    <Link
+      to="/orders"
       className="
         flex min-w-0
         rounded-none
@@ -51,6 +53,8 @@ const OverviewCard = ({ title, value, hint }: OverviewCardProps) => {
         bg-white
         p-3.5
         sm:p-4
+        transition-colors hover:border-green-300 hover:bg-green-50/30
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:ring-offset-2
       "
     >
       {/* Top */}
@@ -84,7 +88,7 @@ const OverviewCard = ({ title, value, hint }: OverviewCardProps) => {
         </p>
       )}
 
-    </div>
+    </Link>
   );
 };
 

@@ -18,6 +18,12 @@ body {
   color: #111827;
 }
 
+/* Keep every dashboard control and page on the same Inter typeface. */
+#root,
+#root * {
+  font-family: Inter, Arial, sans-serif !important;
+}
+
 .input {
   @apply h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100;
 }

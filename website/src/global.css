@@ -83,6 +83,7 @@ main {
 
 .category-detail-page,
 .category-detail-page .category-breadcrumbs,
+.category-detail-page .subcategory-hero-clean,
 .category-detail-page .category-products-container {
   background-color: var(--site-warm-bg) !important;
 }

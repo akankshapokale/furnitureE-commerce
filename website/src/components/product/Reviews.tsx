@@ -10,6 +10,7 @@ import {
   type ReviewSummary,
 } from "../../services/catalog";
 import Stars from "./Stars";
+import { resolveCmsImage } from "../../services/media";
 
 const formatDate = (value: string) => {
   const date = new Date(value);
@@ -180,7 +181,11 @@ const Reviews = ({ productId }: { productId: number }) => {
             {reviews.map((review) => (
               <article key={review.id} className="pd-review">
                 <div className="pd-review-head">
-                  <div className="pd-avatar">{(review.reviewer_name || "C").charAt(0).toUpperCase()}</div>
+                  {resolveCmsImage(review.image_url) ? (
+                    <img className="pd-avatar pd-avatar-image" src={resolveCmsImage(review.image_url) ?? undefined} alt={`${review.reviewer_name || "Customer"} review`} loading="lazy" />
+                  ) : (
+                    <div className="pd-avatar">{(review.reviewer_name || "C").charAt(0).toUpperCase()}</div>
+                  )}
                   <div>
                     <strong>{review.reviewer_name || "Customer"}</strong>
                     {review.is_verified_purchase && (

@@ -1,13 +1,11 @@
 import { useState } from "react";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Menu } from "lucide-react";
+import { Outlet } from "react-router-dom";
+import { Menu } from "lucide-react";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 
 const DashboardLayout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const navigate = useNavigate();
-  const location = useLocation();
 
   return (
     <div className="flex min-h-screen bg-white">
@@ -41,19 +39,6 @@ const DashboardLayout = () => {
 
         {/* Mobile Top Bar */}
         <div className="sticky top-0 z-40 flex h-14 shrink-0 items-center border-b border-gray-200 bg-white px-4 lg:hidden">
-
-          {location.pathname !== "/" && (
-            <button
-              type="button"
-              onClick={() => navigate("/")}
-              className="mr-2 flex h-9 w-9 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100"
-              aria-label="Back to Dashboard"
-              title="Back to Dashboard"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-          )}
-
           <button
             type="button"
             onClick={() => setMobileOpen(true)}

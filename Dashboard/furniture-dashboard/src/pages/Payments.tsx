@@ -204,7 +204,7 @@ const Payments = () => {
 
   const handleExportPayments = () => {
   if (payments.length === 0) {
-    alert("No payment data available to export.");
+    setActionMessage("No payment data available to export.");
     return;
   }
 

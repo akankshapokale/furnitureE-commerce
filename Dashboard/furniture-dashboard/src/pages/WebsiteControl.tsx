@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import CategoryManager from "../components/products/CategoryManager";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 import {
   Globe,
   Image as ImageIcon,
@@ -66,6 +67,8 @@ interface WebsiteSetting {
 
 interface HeroBannerItem {
   id: number;
+  sort_order?: number | null;
+  display_order?: number | null;
   eyebrow: string;
   title: string;
   description: string;
@@ -74,6 +77,15 @@ interface HeroBannerItem {
   button_link: string;
   is_active: boolean;
 }
+
+const orderHeroBanners = (items: HeroBannerItem[]) => [...items].sort((a, b) => {
+  const orderA = a.sort_order ?? a.display_order;
+  const orderB = b.sort_order ?? b.display_order;
+  if (orderA != null && orderB != null && orderA !== orderB) return orderA - orderB;
+  if (orderA != null && orderB == null) return -1;
+  if (orderA == null && orderB != null) return 1;
+  return a.id - b.id;
+});
 
 type Module =
   | "products"
@@ -224,7 +236,10 @@ const ProductsModule = ({
   const [products, setProducts] = useState<ProductRecord[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [taxonomyLoading, setTaxonomyLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<ProductRecord | null>(null);
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("");
   const [filterStatus] = useState("");
@@ -232,28 +247,38 @@ const ProductsModule = ({
   const PAGE_SIZE = 12;
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setCatalogLoading(true);
+    setCatalogError("");
     try {
-      const [pr, cr, sr] = await Promise.all([
+      const pr = await Promise.race([
         getProducts(),
-        getCategories(),
-        getSubCategories(),
+        new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("timeout")), 15_000)),
       ]);
       setProducts(pr.data.data || []);
+    } catch {
+      setCatalogError("Products are taking too long to load. Check your connection and try again.");
+      onToast("Failed to load products", "error");
+    } finally {
+      setCatalogLoading(false);
+    }
+  }, [onToast]);
+
+  const loadTaxonomy = useCallback(async () => {
+    try {
+      const [cr, sr] = await Promise.all([getCategories(), getSubCategories()]);
       setCategories(cr.data.data || []);
       setSubCategories(sr.data.data || []);
     } catch {
-      onToast("Failed to load products", "error");
+      onToast("Products loaded, but category filters could not be loaded", "error");
     } finally {
-      setLoading(false);
+      setTaxonomyLoading(false);
     }
   }, [onToast]);
 
   useEffect(() => {
-    // load performs an asynchronous fetch; its state updates follow the response.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
-  }, [load]);
+    loadTaxonomy();
+  }, [load, loadTaxonomy]);
 
   const filtered = products.filter((p) => {
     const matchSearch =
@@ -271,7 +296,6 @@ const ProductsModule = ({
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const handleDelete = async (id: number, name: string) => {
-    if (!window.confirm(`Delete "${name}"? Products linked to existing records will be archived to preserve those records.`)) return;
     try {
       const response = await deleteProduct(id);
       if (response.data.data?.archived) {
@@ -311,7 +335,7 @@ const ProductsModule = ({
   const subCatName = (id: number | null) =>
     subCategories.find((s) => s.id === id)?.name ?? "";
 
-  if (loading)
+  if (catalogLoading)
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="h-8 w-8 animate-spin text-green-600" />
@@ -320,6 +344,8 @@ const ProductsModule = ({
 
   return (
     <div>
+      {deleteTarget && <ConfirmDialog title="Delete product?" message={`Delete "${deleteTarget.name}"? Products linked to existing records will be archived to preserve those records.`} onCancel={() => setDeleteTarget(null)} onConfirm={() => { const target = deleteTarget; setDeleteTarget(null); void handleDelete(target.id, target.name); }} />}
+      {catalogError && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><span>{catalogError}</span><button type="button" onClick={() => void load()} className="font-semibold underline">Retry</button></div>}
       {/* Product overview */}
       <section className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         {[
@@ -361,7 +387,7 @@ const ProductsModule = ({
           className="h-10 w-full border border-gray-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-green-500 sm:w-56"
           aria-label="Filter products by category"
         >
-          <option value="">All Categories</option>
+          <option value="">{taxonomyLoading ? "Loading categories…" : "All Categories"}</option>
           {categories.map((category) => (
             <option key={category.id} value={String(category.id)}>{category.name}</option>
           ))}
@@ -420,7 +446,7 @@ const ProductsModule = ({
               </header>
 
               <div className="flex flex-1 flex-col gap-3 p-4">
-                <p className="min-h-10 text-sm leading-5 text-slate-600 line-clamp-2">{product.short_description || "No description available."}</p>
+                <p className="min-h-10 text-sm leading-5 text-slate-600 line-clamp-2">{product.short_description || product.description || "No description available."}</p>
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3">
                   <div className="flex items-baseline gap-2">
                     <span className="text-lg font-bold text-slate-900">{formatINR(product.discount_price || product.price)}</span>
@@ -440,7 +466,7 @@ const ProductsModule = ({
                 <span className="min-w-0 truncate font-mono text-[10px] text-slate-500" title={product.sku || product.slug}>{product.sku || product.slug}</span>
                 <div className="flex shrink-0 items-center gap-2">
                   <button type="button" onClick={() => navigate(`/products/${product.id}`, { state: { backgroundLocation: location } })} className="inline-flex items-center gap-1 border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-gray-50"><Pencil className="h-3 w-3" /> Edit</button>
-                  <button type="button" onClick={() => handleDelete(product.id, product.name)} className="inline-flex items-center gap-1 border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-3 w-3" /> Delete</button>
+                  <button type="button" onClick={() => setDeleteTarget(product)} className="inline-flex items-center gap-1 border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-3 w-3" /> Delete</button>
                   <button type="button" aria-label={`Change status for ${product.name}`} onClick={() => handleStatus(product.id, product.status, product.name)} className="border border-gray-200 p-1.5 text-slate-500 hover:bg-gray-50">{product.status === "active" ? <ToggleLeft className="h-4 w-4" /> : <ToggleRight className="h-4 w-4" />}</button>
                 </div>
               </footer>
@@ -499,6 +525,7 @@ const BannersModule = ({
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [editingBannerId, setEditingBannerId] = useState<number | null>(null);
+  const [deleteBannerId, setDeleteBannerId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -518,7 +545,7 @@ const BannersModule = ({
       const r = await fetch(`${API_URL}/hero-banners/admin`, { headers: staffHeaders(), cache: "no-store" });
       const d = await r.json();
       if (!r.ok || !d.success || !Array.isArray(d.data)) throw new Error(d.message || "Failed to load banners");
-      setHeroBanners(d.data);
+      setHeroBanners(orderHeroBanners(d.data));
     } catch (error) {
       onToast(error instanceof Error ? error.message : "Failed to load banners", "error");
     } finally {
@@ -617,7 +644,7 @@ const BannersModule = ({
       });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.message || "Failed to update banner");
-      setHeroBanners((items) => items.map((item) => item.id === banner.id ? result.data : item));
+      setHeroBanners((items) => orderHeroBanners(items.map((item) => item.id === banner.id ? result.data : item)));
       onToast(banner.is_active ? "Banner unpublished" : "Banner published", "success");
     } catch (error) {
       onToast(error instanceof Error ? error.message : "Failed to update banner", "error");
@@ -625,7 +652,6 @@ const BannersModule = ({
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm("Delete this banner?")) return;
     try {
       const r = await fetch(`${API_URL}/hero-banners/${id}`, {
         method: "DELETE",
@@ -641,24 +667,28 @@ const BannersModule = ({
   };
 
   const inputCls =
-    "w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100";
+    "w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-100";
+  const bannerPreviewSrc = previewUrl.startsWith("blob:")
+    ? previewUrl
+    : getMediaUrl(previewUrl || newBanner.image_url);
 
   if (loading)
     return (
       <div className="flex items-center justify-center py-24">
-        <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-slate-500" />
       </div>
     );
 
   return (
     <div className="space-y-5">
+      {deleteBannerId !== null && <ConfirmDialog title="Delete banner?" message="This banner will be permanently deleted." onCancel={() => setDeleteBannerId(null)} onConfirm={() => { const id = deleteBannerId; setDeleteBannerId(null); void handleDelete(id); }} />}
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-600">
           {heroBanners.length} hero banner{heroBanners.length !== 1 ? "s" : ""}
         </p>
         <button
-          onClick={() => { setEditingBannerId(null); setShowAdd(true); }}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 transition"
+          onClick={() => { setEditingBannerId(null); setNewBanner({ eyebrow: "HEAVY-DUTY STEEL STORAGE", title: "", description: "", image_url: "", button_text: "Shop Now", button_link: "/category/cupboards-almirahs" }); setPreviewUrl(""); setShowAdd(true); }}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
         >
           <Plus className="h-4 w-4" />
           Add Banner
@@ -669,7 +699,7 @@ const BannersModule = ({
       {showAdd && (
         <form
           onSubmit={handleAdd}
-          className="border border-green-200 bg-green-50 p-5 space-y-4"
+          className="space-y-4 border border-gray-200 bg-white p-4 sm:p-5"
         >
           <h3 className="font-semibold text-slate-800">{editingBannerId ? "Edit Hero Banner" : "New Hero Banner"}</h3>
 
@@ -751,11 +781,11 @@ const BannersModule = ({
                     }}
                   />
                 </div>
-                {(previewUrl || newBanner.image_url) && (
+                {bannerPreviewSrc && (
                   <img
-                    src={previewUrl || getMediaUrl(newBanner.image_url)}
+                    src={bannerPreviewSrc}
                     alt="preview"
-                    className="h-32 w-auto rounded-lg object-cover border border-gray-200"
+                    className="aspect-[16/6] max-h-64 w-full border border-gray-100 bg-white object-contain"
                   />
                 )}
               </div>
@@ -791,7 +821,7 @@ const BannersModule = ({
             <button
               type="submit"
               disabled={saving || uploading}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
             >
               {saving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -802,7 +832,7 @@ const BannersModule = ({
             </button>
             <button
               type="button"
-              onClick={() => setShowAdd(false)}
+              onClick={() => { setShowAdd(false); setEditingBannerId(null); setNewBanner({ eyebrow: "HEAVY-DUTY STEEL STORAGE", title: "", description: "", image_url: "", button_text: "Shop Now", button_link: "/category/cupboards-almirahs" }); setPreviewUrl(""); }}
               className="rounded-lg border border-gray-200 px-4 py-2 text-sm hover:bg-gray-50"
             >
               Cancel
@@ -812,25 +842,28 @@ const BannersModule = ({
       )}
 
       {/* Banner list */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {heroBanners.map((banner) => (
-          <div
+      <div className="divide-y divide-gray-200 border-y border-gray-200">
+        {heroBanners.map((banner, index) => (
+          <article
             key={banner.id}
-            className="relative overflow-hidden border border-gray-200 bg-white shadow-sm"
+            className="flex flex-col gap-4 py-4 sm:flex-row sm:items-center"
           >
-            {banner.image_url && (
+            <div className="flex aspect-[16/6] w-full shrink-0 items-center justify-center overflow-hidden border border-gray-100 bg-white sm:w-48">
+            {banner.image_url ? (
               <img
                 src={getMediaUrl(banner.image_url)}
                 alt={banner.title}
-                className="h-36 w-full object-cover"
+                className="h-full w-full object-contain"
                 onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                  e.currentTarget.style.visibility = "hidden";
                 }}
               />
-            )}
-            <div className="p-4">
+            ) : <ImageIcon className="h-7 w-7 text-slate-300" />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Banner {index + 1}</p>
               {banner.eyebrow && (
-                <p className="text-[10px] font-bold uppercase tracking-widest text-green-600">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
                   {banner.eyebrow}
                 </p>
               )}
@@ -847,7 +880,7 @@ const BannersModule = ({
                   label={banner.is_active ? "Active" : "Inactive"}
                   color={
                     banner.is_active
-                      ? statusColors.active
+                      ? "bg-slate-100 text-slate-700 border-slate-200"
                       : "bg-gray-100 text-gray-500 border-gray-200"
                   }
                 />
@@ -859,7 +892,7 @@ const BannersModule = ({
                   {banner.is_active ? "Unpublish" : "Publish"}
                 </button>
                 <button
-                  onClick={() => handleDelete(banner.id)}
+                  onClick={() => setDeleteBannerId(banner.id)}
                   className="flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition"
                 >
                   <Trash2 className="h-3 w-3" />
@@ -868,7 +901,7 @@ const BannersModule = ({
                 </div>
               </div>
             </div>
-          </div>
+          </article>
         ))}
 
         {heroBanners.length === 0 && !showAdd && (
@@ -1363,26 +1396,19 @@ const WebsiteControl = () => {
             <p className="mb-6 text-sm text-gray-500">
               Select a section below to manage your website content.
             </p>
-            <div className="grid auto-rows-fr grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {CMS_MODULES.map((mod) => {
                 const Icon = mod.icon;
                 return (
                   <button
                     key={mod.id}
                     onClick={() => selectModule(mod.id)}
-                    className="group flex h-full min-h-60 flex-col items-center justify-center gap-4 border border-gray-200 bg-white p-8 text-center shadow-sm hover:shadow-md hover:border-green-300 transition-all duration-200 active:scale-[0.98]"
+                    className="group flex min-h-[158px] flex-col items-center justify-center gap-3 border border-gray-200 bg-white px-5 py-6 text-center transition-colors duration-200 hover:border-green-700 hover:text-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-700 focus-visible:ring-offset-2"
                   >
-                    <div
-                      className={`flex h-16 w-16 items-center justify-center rounded-2xl ${mod.bg} ring-2 ring-white shadow-sm group-hover:scale-110 transition-transform duration-200`}
-                    >
-                      <Icon className={`h-8 w-8 ${mod.iconColor}`} />
-                    </div>
-                    <div>
-                      <p className="text-base font-bold text-slate-800">
+                    <Icon className="h-8 w-8 text-slate-900 transition-colors group-hover:text-green-800" strokeWidth={2} />
+                    <div className="text-slate-900 transition-colors group-hover:text-green-800">
+                      <p className="text-base font-medium">
                         {mod.label}
-                      </p>
-                      <p className="mt-1 text-xs text-gray-500 leading-relaxed">
-                        {mod.description}
                       </p>
                     </div>
                   </button>
