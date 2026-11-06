@@ -64,6 +64,7 @@ const PaymentsRefunds = () => {
   const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
   const [activeDatePreset, setActiveDatePreset] = useState("All dates");
   const [dateOpen, setDateOpen] = useState(false);
+  const datePickerRef = useRef<HTMLDivElement>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1));
   const [rangeAnchor, setRangeAnchor] = useState<Date | null>(null);
   const [selected, setSelected] = useState<RefundPayment | null>(null);

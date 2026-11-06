@@ -967,7 +967,7 @@ const SummaryCard = ({
   valueStyle,
 }: SummaryCardProps) => {
   return (
-    <button type="button" onClick={onClick} aria-label={`View ${title}`} className="min-w-0 cursor-pointer border border-gray-200 bg-white p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:ring-offset-2 sm:p-5">
+    <div className="min-w-0 border border-gray-200 bg-white p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="min-h-8 whitespace-normal break-words text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-500 sm:text-xs">{title}</p>
@@ -975,7 +975,7 @@ const SummaryCard = ({
         </div>
         <Icon className={`h-5 w-5 shrink-0 ${iconStyle}`} />
       </div>
-    </button>
+    </div>
   );
 };
 
