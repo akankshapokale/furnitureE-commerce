@@ -1,5 +1,10 @@
+import { Link } from "react-router-dom";
+
 interface Customer {
   id: number;
+  name?: string;
+  email?: string;
+  phone?: string | null;
   is_active: boolean;
   created_at: string;
 }
@@ -8,6 +13,7 @@ interface Order {
   id: number;
   status: string;
   user_id?: number;
+  total_amount?: number | string;
 }
 
 interface CustomerOverviewProps {
@@ -15,108 +21,68 @@ interface CustomerOverviewProps {
   orders: Order[];
 }
 
-const CustomerOverview = ({
-  customers,
-  orders,
-}: CustomerOverviewProps) => {
-  const totalCustomers = customers.length;
+const CustomerOverview = ({ customers, orders }: CustomerOverviewProps) => {
+  const stats = new Map<number, { count: number; spent: number }>();
+  orders.forEach((o) => {
+    if (o.user_id == null || ["cancelled", "canceled", "returned"].includes(o.status?.toLowerCase())) return;
+    const s = stats.get(o.user_id) || { count: 0, spent: 0 };
+    s.count += 1;
+    s.spent += Number(o.total_amount || 0);
+    stats.set(o.user_id, s);
+  });
 
-  const activeCustomers = customers.filter(
-    (customer) => customer.is_active
-  ).length;
-
-  const thirtyDaysAgo = new Date().getTime() - 30 * 24 * 60 * 60 * 1000;
-
-  const newCustomers = customers.filter(
-    (customer) =>
-      new Date(customer.created_at).getTime() >= thirtyDaysAgo
-  ).length;
-
-  const orderingCustomers = new Set(
-    orders
-      .map((order) => order.user_id)
-      .filter((id) => id !== undefined && id !== null)
-  ).size;
+  const activeCount = customers.filter((c) => c.is_active).length;
+  const recent = [...customers]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 6);
 
   return (
-    <div className="flex h-full w-full min-w-0 flex-col rounded-none border border-gray-200 bg-white p-4">
-
-      {/* Header */}
-      <div className="min-w-0">
-        <h2 className="text-lg font-bold text-slate-900 sm:text-xl">
-          Customer Overview
-        </h2>
-
-        <p className="mt-1 text-xs text-slate-500 sm:text-sm">
-          Registered customers
-        </p>
-      </div>
-
-      {/* Main Count */}
-      <div className="mt-4 flex flex-1 flex-col justify-center rounded-none bg-green-50 p-4">
-        <p className="text-xs font-medium text-slate-500 sm:text-sm">
-          Total Customers
-        </p>
-
-        <h3 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">
-          {totalCustomers.toLocaleString("en-IN")}
-        </h3>
-
-        <p className="mt-1 text-xs text-slate-500">
-          {orderingCustomers.toLocaleString("en-IN")} have placed orders
-        </p>
-      </div>
-
-      {/* Stats */}
-      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-
-        {/* Active */}
-        <div className="rounded-none border border-gray-100 bg-slate-50 p-2.5">
-          <p className="text-[11px] font-medium text-slate-400">
-            Active
-          </p>
-
-          <p className="mt-1 text-lg font-bold text-slate-900">
-            {activeCustomers.toLocaleString("en-IN")}
-          </p>
-
-          <p className="mt-1 text-[10px] text-slate-400">
-            Active accounts
+    <div className="flex h-full w-full min-w-0 flex-col border border-gray-200 bg-white p-4">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-lg font-bold text-slate-900 sm:text-xl">Customer Overview</h2>
+          <p className="mt-1 text-xs text-slate-500 sm:text-sm">
+            {customers.length.toLocaleString("en-IN")} customers · {activeCount.toLocaleString("en-IN")} active
           </p>
         </div>
-
-        {/* Completed */}
-        <div className="rounded-none border border-gray-100 bg-slate-50 p-2.5">
-          <p className="text-[11px] font-medium text-slate-400">
-            New
-          </p>
-
-          <p className="mt-1 text-lg font-bold text-green-600">
-            {newCustomers.toLocaleString("en-IN")}
-          </p>
-
-          <p className="mt-1 text-[10px] text-slate-400">
-            Last 30 days
-          </p>
-        </div>
-
-        {/* Pending */}
-        <div className="rounded-none border border-gray-100 bg-slate-50 p-2.5">
-          <p className="text-[11px] font-medium text-slate-400">
-            Inactive
-          </p>
-
-          <p className="mt-1 text-lg font-bold text-red-600">
-            {(totalCustomers - activeCustomers).toLocaleString("en-IN")}
-          </p>
-
-          <p className="mt-1 text-[10px] text-slate-400">
-            Disabled accounts
-          </p>
-        </div>
-
+        <Link to="/customers" className="shrink-0 text-xs font-semibold text-slate-900 hover:underline sm:text-sm">View all →</Link>
       </div>
 
+      <div className="mt-4 min-w-0 flex-1 overflow-x-auto">
+        <table className="w-full min-w-[420px] text-left text-sm">
+          <thead>
+            <tr className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              <th className="px-3 py-2">Customer</th>
+              <th className="px-3 py-2 text-right">Orders</th>
+              <th className="px-3 py-2 text-right">Spent</th>
+              <th className="px-3 py-2">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {recent.length === 0 && (
+              <tr><td colSpan={4} className="px-3 py-6 text-center text-slate-400">No customers yet</td></tr>
+            )}
+            {recent.map((c) => {
+              const s = stats.get(c.id);
+              return (
+                <tr key={c.id} className="border-t border-gray-100">
+                  <td className="px-3 py-2.5">
+                    <p className="max-w-[180px] truncate font-medium text-slate-800">{c.name || "—"}</p>
+                    <p className="max-w-[180px] truncate text-xs text-slate-400">{c.email || c.phone || ""}</p>
+                  </td>
+                  <td className="px-3 py-2.5 text-right text-slate-700">{(s?.count ?? 0).toLocaleString("en-IN")}</td>
+                  <td className="px-3 py-2.5 text-right font-medium text-slate-800">₹{Math.round(s?.spent ?? 0).toLocaleString("en-IN")}</td>
+                  <td className="px-3 py-2.5">
+                    <span className={`rounded px-2 py-0.5 text-xs font-medium ${c.is_active ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                      {c.is_active ? "Active" : "Inactive"}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

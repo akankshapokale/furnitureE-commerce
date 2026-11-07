@@ -281,6 +281,7 @@ export interface ProductReview {
   title: string | null;
   comment: string | null;
   image_url?: string | null;
+  image_urls?: string[] | null;
   is_verified_purchase: boolean;
   status: "pending" | "approved" | "hidden";
   created_at: string;
@@ -298,6 +299,7 @@ export const createReview = (data: {
   status?: string;
   is_verified_purchase?: boolean;
   image_url?: string | null;
+  image_urls?: string[];
   created_at?: string;
 }) => api.post("/reviews", data);
 

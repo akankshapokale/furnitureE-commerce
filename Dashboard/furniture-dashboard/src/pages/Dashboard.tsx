@@ -1,15 +1,13 @@
 import { useEffect, useState } from "react";
 import OverviewCard from "../components/dashboard/OverviewCard";
 import SalesSummary from "../components/dashboard/SalesSummary";
-import OrdersOverview from "../components/dashboard/OrdersOverview";
+import MostBoughtProducts from "../components/dashboard/MostBoughtProducts";
 import CustomerOverview from "../components/dashboard/CustomerOverview";
-import ProductOverview from "../components/dashboard/ProductOverview";
 import RecentOrders from "../components/dashboard/RecentOrders";
 
 import {
   getOrders,
   getPayments,
-  getProducts,
   getUsers,
 } from "../services/api";
 
@@ -21,6 +19,7 @@ interface Order {
   payment_status: string;
   created_at: string;
   customer_name?: string;
+  user_id?: number;
   items?: { product_name?: string; quantity?: number }[];
 }
 
@@ -32,17 +31,11 @@ interface Payment {
   created_at?: string;
 }
 
-interface Product {
-  id: number;
-  name: string;
-  stock_quantity: number;
-  variants?: { stock_quantity: number; is_active?: boolean }[];
-  status?: string;
-  is_featured?: boolean;
-}
-
 interface User {
   id: number;
+  name?: string;
+  email?: string;
+  phone?: string | null;
   role: string;
   is_active: boolean;
   created_at: string;
@@ -51,17 +44,15 @@ interface User {
 const Dashboard = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<User[]>([]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const [orders, payments, products, users] =
+        const [orders, payments, users] =
           await Promise.allSettled([
             getOrders(),
             getPayments(),
-            getProducts(),
             getUsers(),
           ]);
 
@@ -70,8 +61,6 @@ const Dashboard = () => {
           setOrders(orders.value.data.data || []);
         if (payments.status === "fulfilled")
           setPayments(payments.value.data.data || []);
-        if (products.status === "fulfilled")
-          setProducts(products.value.data.data || []);
         if (users.status === "fulfilled")
           setCustomers(
             (users.value.data.data || []).filter(
@@ -108,17 +97,12 @@ const Dashboard = () => {
       order.status?.toLowerCase() === "delivered"
   ).length;
 
-  const returnedOrders = orders.filter(
-    (order) =>
-      order.status?.toLowerCase() === "returned"
-  ).length;
-
   return (
     <div className="min-h-screen min-w-0 overflow-x-hidden bg-white">
       <div className="w-full min-w-0 p-4 sm:p-5 md:p-6 lg:p-6">
 
         {/* Overview Cards */}
-        <section className="grid min-w-0 grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+        <section className="grid min-w-0 grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
 
           <OverviewCard
             title="Total Orders"
@@ -140,11 +124,6 @@ const Dashboard = () => {
             value={deliveredOrders.toLocaleString("en-IN")}
           />
 
-          <OverviewCard
-            title="Returned"
-            value={returnedOrders.toLocaleString("en-IN")}
-          />
-
         </section>
 
         {/* Sales + Orders */}
@@ -155,25 +134,14 @@ const Dashboard = () => {
           </div>
 
           <div className="flex min-w-0">
-            <OrdersOverview
-              orders={orders}
-              totalOrders={totalOrders}
-            />
+            <MostBoughtProducts orders={orders} />
           </div>
 
         </section>
 
-        {/* Customer + Product */}
-        <section className="mt-4 grid min-w-0 grid-cols-1 items-stretch gap-4 lg:mt-5 lg:grid-cols-2">
-
-          <div className="flex min-w-0">
-            <CustomerOverview customers={customers} orders={orders} />
-          </div>
-
-          <div className="flex min-w-0">
-            <ProductOverview products={products} orders={orders} />
-          </div>
-
+        {/* Customers */}
+        <section className="mt-4 min-w-0 lg:mt-5">
+          <CustomerOverview customers={customers} orders={orders} />
         </section>
 
         {/* Recent Orders */}

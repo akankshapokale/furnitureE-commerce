@@ -37,7 +37,10 @@ const reviewDateValue = (value?: string | null) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? localDateValue() : localDateValue(date);
 };
-const emptyForm = { reviewer_name: "", rating: 5, title: "", comment: "", status: "approved", verified: true, image_url: "", review_date: localDateValue() };
+const MAX_IMAGES = 6;
+const reviewImages = (r: ProductReview): string[] =>
+  r.image_urls && r.image_urls.length ? r.image_urls : r.image_url ? [r.image_url] : [];
+const emptyForm = { reviewer_name: "", rating: 5, title: "", comment: "", status: "approved", verified: true, image_urls: [] as string[], review_date: localDateValue() };
 
 const ReviewsManager = ({ productId }: { productId: number }) => {
   const [reviews, setReviews] = useState<ProductReview[]>([]);
@@ -98,7 +101,8 @@ const ReviewsManager = ({ productId }: { productId: number }) => {
         comment: form.comment,
         status: form.status as ProductReview["status"],
         is_verified_purchase: form.verified,
-        image_url: form.image_url || null,
+        image_urls: form.image_urls,
+        image_url: form.image_urls[0] ?? null,
         created_at: new Date(`${form.review_date}T12:00:00`).toISOString(),
       };
       if (editingId !== null) await updateReview(editingId, reviewData);
@@ -115,40 +119,46 @@ const ReviewsManager = ({ productId }: { productId: number }) => {
   };
 
   const uploadCustomerImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type)) {
-      setError("Only JPG, PNG, and WebP images are allowed.");
-      event.target.value = "";
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (!files.length) return;
+    if (files.length > MAX_IMAGES - form.image_urls.length) {
+      setError(`You can attach up to ${MAX_IMAGES} images per review.`);
       return;
     }
-    if (file.size > 8 * 1024 * 1024) {
-      setError("Image must be smaller than 8 MB.");
-      event.target.value = "";
+    if (files.some((f) => !["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(f.type))) {
+      setError("Only JPG, PNG, and WebP images are allowed.");
+      return;
+    }
+    if (files.some((f) => f.size > 8 * 1024 * 1024)) {
+      setError("Each image must be smaller than 8 MB.");
       return;
     }
     setUploading(true);
     setError("");
     try {
-      const body = new FormData();
-      body.append("image", file);
       const token = localStorage.getItem("staff_token");
-      const response = await fetch(`${API_ORIGIN}/api/upload/image`, { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message || "Upload failed");
-      const imageUrl = result.url ?? result.data?.url;
-      if (typeof imageUrl !== "string" || !imageUrl) throw new Error(result.message || "The upload completed without returning an image URL.");
-      setForm((current) => ({ ...current, image_url: imageUrl }));
+      const urls: string[] = [];
+      for (const file of files) {
+        const body = new FormData();
+        body.append("image", file);
+        const response = await fetch(`${API_ORIGIN}/api/upload/image`, { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "Upload failed");
+        const imageUrl = result.url ?? result.data?.url;
+        if (typeof imageUrl !== "string" || !imageUrl) throw new Error(result.message || "The upload completed without returning an image URL.");
+        urls.push(imageUrl);
+      }
+      setForm((current) => ({ ...current, image_urls: [...current.image_urls, ...urls] }));
     } catch (err) {
       setError(apiError(err, "Failed to upload customer image"));
     } finally {
       setUploading(false);
-      event.target.value = "";
     }
   };
 
   const startEditing = (review: ProductReview) => {
-      setForm({ reviewer_name: review.reviewer_name, rating: review.rating, title: review.title ?? "", comment: review.comment ?? "", status: review.status, verified: review.is_verified_purchase, image_url: review.image_url ?? "", review_date: reviewDateValue(review.created_at) });
+      setForm({ reviewer_name: review.reviewer_name, rating: review.rating, title: review.title ?? "", comment: review.comment ?? "", status: review.status, verified: review.is_verified_purchase, image_urls: reviewImages(review), review_date: reviewDateValue(review.created_at) });
     const date = new Date(review.created_at);
     if (!Number.isNaN(date.getTime())) setReviewCalendarMonth(new Date(date.getFullYear(), date.getMonth(), 1));
     setEditingId(review.id);
@@ -222,11 +232,11 @@ const ReviewsManager = ({ productId }: { productId: number }) => {
             </div>}
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-600">Customer Image <span className="font-normal text-slate-400">(optional)</span></label>
-            <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadCustomerImage} className="hidden" />
+            <label className="mb-1.5 block text-xs font-semibold text-slate-600">Customer Images <span className="font-normal text-slate-400">(optional, up to {MAX_IMAGES})</span></label>
+            <input ref={imageInputRef} type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={uploadCustomerImage} className="hidden" />
             <div className="flex flex-wrap items-center gap-3">
-              {form.image_url && <div className="relative h-16 w-16 overflow-hidden border border-gray-200"><img src={getMediaUrl(form.image_url)} alt="Customer review preview" className="h-full w-full object-cover" /><button type="button" onClick={() => setForm((current) => ({ ...current, image_url: "" }))} aria-label="Remove customer image" className="absolute right-0 top-0 bg-white/90 p-0.5 text-slate-600"><X size={14} /></button></div>}
-              <button type="button" onClick={() => imageInputRef.current?.click()} disabled={uploading} className="inline-flex items-center gap-2 border border-gray-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"><ImagePlus size={16} />{uploading ? "Uploading…" : form.image_url ? "Change image" : "Upload image"}</button>
+              {form.image_urls.map((url, i) => <div key={`${url}-${i}`} className="relative h-16 w-16 overflow-hidden border border-gray-200"><img src={getMediaUrl(url)} alt={`Customer review preview ${i + 1}`} className="h-full w-full object-cover" /><button type="button" onClick={() => setForm((current) => ({ ...current, image_urls: current.image_urls.filter((_, idx) => idx !== i) }))} aria-label="Remove customer image" className="absolute right-0 top-0 bg-white/90 p-0.5 text-slate-600"><X size={14} /></button></div>)}
+              {form.image_urls.length < MAX_IMAGES && <button type="button" onClick={() => imageInputRef.current?.click()} disabled={uploading} className="inline-flex items-center gap-2 border border-gray-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"><ImagePlus size={16} />{uploading ? "Uploading…" : form.image_urls.length ? "Add more" : "Upload images"}</button>}
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -270,7 +280,7 @@ const ReviewsManager = ({ productId }: { productId: number }) => {
                       {new Date(review.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                     </span>
                   </div>
-                  {review.image_url && <img src={getMediaUrl(review.image_url)} alt={`${review.reviewer_name}'s review`} loading="lazy" className="mt-3 h-16 w-16 border border-gray-100 object-cover" />}
+                  {reviewImages(review).length > 0 && <div className="mt-3 flex flex-wrap gap-2">{reviewImages(review).map((url, i) => <img key={`${url}-${i}`} src={getMediaUrl(url)} alt={`${review.reviewer_name}'s review ${i + 1}`} loading="lazy" className="h-16 w-16 border border-gray-100 object-cover" />)}</div>}
                   {review.title && <p className="mt-1 text-sm font-medium text-slate-800">{review.title}</p>}
                   {review.comment && <p className="mt-1 text-sm text-slate-600">{review.comment}</p>}
                 </div>
