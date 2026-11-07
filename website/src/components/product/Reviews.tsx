@@ -181,11 +181,7 @@ const Reviews = ({ productId }: { productId: number }) => {
             {reviews.map((review) => (
               <article key={review.id} className="pd-review">
                 <div className="pd-review-head">
-                  {resolveCmsImage(review.image_url) ? (
-                    <img className="pd-avatar pd-avatar-image" src={resolveCmsImage(review.image_url) ?? undefined} alt={`${review.reviewer_name || "Customer"} review`} loading="lazy" />
-                  ) : (
-                    <div className="pd-avatar">{(review.reviewer_name || "C").charAt(0).toUpperCase()}</div>
-                  )}
+                  <div className="pd-avatar">{(review.reviewer_name || "C").charAt(0).toUpperCase()}</div>
                   <div>
                     <strong>{review.reviewer_name || "Customer"}</strong>
                     {review.is_verified_purchase && (
@@ -200,6 +196,20 @@ const Reviews = ({ productId }: { productId: number }) => {
                 <Stars value={review.rating} size={15} />
                 {review.title && <h4>{review.title}</h4>}
                 {review.comment && <p>{review.comment}</p>}
+                {(() => {
+                  const photos = (review.image_urls?.length ? review.image_urls : review.image_url ? [review.image_url] : [])
+                    .map((url) => resolveCmsImage(url))
+                    .filter((url): url is string => Boolean(url));
+                  return photos.length > 0 ? (
+                    <div className="pd-review-photos">
+                      {photos.map((url, i) => (
+                        <a key={`${url}-${i}`} href={url} target="_blank" rel="noreferrer">
+                          <img src={url} alt={`${review.reviewer_name || "Customer"} review photo ${i + 1}`} loading="lazy" />
+                        </a>
+                      ))}
+                    </div>
+                  ) : null;
+                })()}
               </article>
             ))}
           </div>

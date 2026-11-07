@@ -11,11 +11,21 @@ const parseRating = (value: unknown) => {
   return Number.isInteger(rating) && rating >= 1 && rating <= 5 ? rating : null;
 };
 
+const MAX_REVIEW_IMAGES = 6;
+
+// Returns a cleaned list of image URLs, or null when the input is invalid.
+const parseImageUrls = (value: unknown): string[] | null => {
+  if (!Array.isArray(value)) return null;
+  const urls = value.map((v) => (typeof v === "string" ? v.trim() : "")).filter(Boolean);
+  if (urls.length > MAX_REVIEW_IMAGES || urls.some((u) => u.length > 2048)) return null;
+  return urls;
+};
+
 // PUBLIC: approved reviews of a product plus the rating summary
 export const getProductReviews = async (req: Request, res: Response) => {
   try {
     const reviews = await pool.query(
-      `SELECT id, reviewer_name, rating, title, comment, image_url, is_verified_purchase, created_at
+      `SELECT id, reviewer_name, rating, title, comment, image_url, image_urls, is_verified_purchase, created_at
        FROM product_reviews
        WHERE product_id = $1 AND status = 'approved'
        ORDER BY created_at DESC, id DESC`,
@@ -139,8 +149,8 @@ export const createStaffReview = async (req: Request, res: Response) => {
   const rating = parseRating(req.body?.rating);
   const status = text(req.body?.status) ?? "approved";
   const comment = text(req.body?.comment);
-  const rawImageUrl = req.body?.image_url;
-  const imageUrl = typeof rawImageUrl === "string" && rawImageUrl.trim() ? rawImageUrl.trim() : null;
+  const imageUrls = req.body?.image_urls === undefined ? (text(req.body?.image_url) ? [text(req.body?.image_url)!] : []) : parseImageUrls(req.body.image_urls);
+  const imageUrl = imageUrls?.[0] ?? null;
   const rawCreatedAt = req.body?.created_at;
   const createdAt = rawCreatedAt === undefined || rawCreatedAt === null || rawCreatedAt === "" ? null : new Date(rawCreatedAt);
 
@@ -150,8 +160,8 @@ export const createStaffReview = async (req: Request, res: Response) => {
       message: "Product, customer name, review description and a rating from 1 to 5 are required",
     });
   }
-  if (rawImageUrl !== undefined && rawImageUrl !== null && rawImageUrl !== "" && (typeof rawImageUrl !== "string" || rawImageUrl.length > 2048)) {
-    return res.status(400).json({ success: false, message: "Customer image URL is invalid" });
+  if (imageUrls === null) {
+    return res.status(400).json({ success: false, message: `Customer images are invalid (max ${MAX_REVIEW_IMAGES})` });
   }
   if (rawCreatedAt !== undefined && rawCreatedAt !== null && rawCreatedAt !== "" && Number.isNaN(createdAt?.getTime())) {
     return res.status(400).json({ success: false, message: "Review date is invalid" });
@@ -163,8 +173,8 @@ export const createStaffReview = async (req: Request, res: Response) => {
   try {
     const result = await pool.query(
       `INSERT INTO product_reviews
-         (product_id, reviewer_name, rating, title, comment, image_url, is_verified_purchase, status, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamp, CURRENT_TIMESTAMP))
+         (product_id, reviewer_name, rating, title, comment, image_url, image_urls, is_verified_purchase, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, COALESCE($10::timestamp, CURRENT_TIMESTAMP))
        RETURNING *`,
       [
         productId,
@@ -173,6 +183,7 @@ export const createStaffReview = async (req: Request, res: Response) => {
         text(req.body?.title),
         comment,
         imageUrl,
+        JSON.stringify(imageUrls),
         req.body?.is_verified_purchase === true,
         status,
         createdAt,
@@ -193,9 +204,9 @@ export const createStaffReview = async (req: Request, res: Response) => {
 export const updateReview = async (req: Request, res: Response) => {
   const rating = req.body?.rating === undefined ? null : parseRating(req.body.rating);
   const status = text(req.body?.status);
-  const imageProvided = Object.prototype.hasOwnProperty.call(req.body ?? {}, "image_url");
-  const rawImageUrl = req.body?.image_url;
-  const imageUrl = typeof rawImageUrl === "string" && rawImageUrl.trim() ? rawImageUrl.trim() : null;
+  const imageProvided = Object.prototype.hasOwnProperty.call(req.body ?? {}, "image_urls") || Object.prototype.hasOwnProperty.call(req.body ?? {}, "image_url");
+  const imageUrls = !imageProvided ? [] : req.body?.image_urls !== undefined ? parseImageUrls(req.body.image_urls) : (text(req.body?.image_url) ? [text(req.body?.image_url)!] : []);
+  const imageUrl = imageUrls?.[0] ?? null;
   const rawCreatedAt = req.body?.created_at;
   const createdAt = rawCreatedAt === undefined || rawCreatedAt === null || rawCreatedAt === "" ? null : new Date(rawCreatedAt);
 
@@ -205,8 +216,8 @@ export const updateReview = async (req: Request, res: Response) => {
   if (status && !STATUSES.includes(status)) {
     return res.status(400).json({ success: false, message: "Invalid status" });
   }
-  if (imageProvided && rawImageUrl !== undefined && rawImageUrl !== null && rawImageUrl !== "" && (typeof rawImageUrl !== "string" || rawImageUrl.length > 2048)) {
-    return res.status(400).json({ success: false, message: "Customer image URL is invalid" });
+  if (imageUrls === null) {
+    return res.status(400).json({ success: false, message: `Customer images are invalid (max ${MAX_REVIEW_IMAGES})` });
   }
   if (rawCreatedAt !== undefined && rawCreatedAt !== null && rawCreatedAt !== "" && Number.isNaN(createdAt?.getTime())) {
     return res.status(400).json({ success: false, message: "Review date is invalid" });
@@ -216,6 +227,7 @@ export const updateReview = async (req: Request, res: Response) => {
     const result = await pool.query(
       `UPDATE product_reviews SET
          image_url = CASE WHEN $1::boolean THEN $2 ELSE image_url END,
+         image_urls = CASE WHEN $1::boolean THEN $13::jsonb ELSE image_urls END,
          created_at = COALESCE($3::timestamp, created_at),
          reviewer_name = COALESCE($4, reviewer_name),
          rating = COALESCE($5, rating),
@@ -239,6 +251,7 @@ export const updateReview = async (req: Request, res: Response) => {
         typeof req.body?.is_verified_purchase === "boolean" ? req.body.is_verified_purchase : null,
         status,
         req.params.id,
+        JSON.stringify(imageUrls),
       ]
     );
 

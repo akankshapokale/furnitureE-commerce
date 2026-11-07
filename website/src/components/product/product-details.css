@@ -1486,6 +1486,21 @@
   object-fit: cover;
 }
 
+.pd-review-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.pd-review-photos img {
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border: 1px solid #e5e7eb;
+  display: block;
+}
+
 .pd-review-head strong {
   display: block;
   font-size: 14.5px;
