@@ -992,7 +992,11 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
               </div>
             </Card>
 
-            {!isNew && <div id="reviews" hidden={drawer && activeTab !== "reviews"} className="scroll-mt-32"><ReviewsManager productId={Number(id)} /></div>}
+            {!isNew && (!drawer || activeTab === "reviews") && (
+              <div id="reviews" className="scroll-mt-32">
+                <ReviewsManager productId={Number(id)} />
+              </div>
+            )}
           </div>
 
           {/* ---------- Side column ---------- */}
