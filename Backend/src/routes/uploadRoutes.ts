@@ -5,8 +5,10 @@ import path from 'path';
 import fs from 'fs';
 import { requirePermission } from '../middleware/staff';
 import { requireAuth } from '../middleware/auth';
+import cloudinary from '../config/cloudinary';
 
 const router = express.Router();
+
 
 // Store uploads alongside existing product images in website/public/uploads/
 const UPLOAD_DIR = path.join(__dirname, '../../../website/public/uploads');
@@ -32,7 +34,15 @@ const storage = multer.diskStorage({
 });
 
 const ALLOWED_MIME = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
-const MAX_SIZE = 8 * 1024 * 1024; // 8 MB
+const MAX_SIZE = 8 * 1024 * 1024; // 8 MB// CMS images are buffered for Cloudinary; the legacy disk storage below remains for reference uploads.
+const cloudinaryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_SIZE },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIME.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only JPG, PNG, WebP, and GIF images are allowed.'));
+  },
+});
 
 const upload = multer({
   storage,
@@ -65,13 +75,24 @@ const customRefUpload = multer({
 });
 
 // POST /api/upload/image — returns { url: '/uploads/filename.ext' } (Admin CMS)
-router.post('/image', requirePermission('website-control'), upload.single('image'), (req: Request, res: Response) => {
+router.post('/image', requirePermission('website-control'), cloudinaryUpload.single('image'), async (req: Request, res: Response) => {
   if (!req.file) {
     res.status(400).json({ message: 'No file uploaded.' });
     return;
   }
-  const url = `/uploads/${req.file.filename}`;
-  res.json({ url, filename: req.file.filename, size: req.file.size });
+  try {
+    const asset = await new Promise<any>((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: 'staging-spaces/cms', resource_type: 'image', use_filename: false, unique_filename: true },
+        (error, result) => error ? reject(error) : result ? resolve(result) : reject(new Error('Cloudinary returned no image.')),
+      );
+      stream.end(req.file!.buffer);
+    });
+    return res.json({ url: asset.secure_url, public_id: asset.public_id, format: asset.format, bytes: asset.bytes, width: asset.width, height: asset.height });
+  } catch (error) {
+    console.error('Cloudinary CMS image upload failed:', error);
+    return res.status(502).json({ message: 'Image upload to Cloudinary failed. Please try again.' });
+  }
 });
 
 // POST /api/upload/reference-image — authenticated customer upload for custom size reference

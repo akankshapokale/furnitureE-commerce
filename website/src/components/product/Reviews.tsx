@@ -45,7 +45,21 @@ const Reviews = ({ productId }: { productId: number }) => {
         setSummary(data.summary ?? null);
         setReviews(Array.isArray(data.reviews) ? data.reviews : []);
       })
-      .catch(() => !cancelled && setError("Reviews could not be loaded right now."))
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const status =
+          typeof err === "object" && err !== null && "status" in err
+            ? Number(err.status)
+            : null;
+
+        setError(
+          status === 500
+            ? "Customer reviews are temporarily unavailable. Please try again later."
+            : err instanceof Error && err.message !== "Something went wrong"
+              ? err.message
+              : "Reviews could not be loaded right now."
+        );
+      })
       .finally(() => !cancelled && setLoading(false));
 
     return () => {

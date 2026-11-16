@@ -7,6 +7,7 @@ import {
   BarChart3,
   TrendingUp,
   Globe,
+  Images,
   ChevronDown,
   Ruler,
 } from "lucide-react";
@@ -65,7 +66,7 @@ const menuSections = [
 const commerceSection = {
   title: "Ecommerce",
   collapsible: true,
-  items: [{ title: "Website Control", path: "/website-control", icon: Globe }],
+  items: [{ title: "Website Control", path: "/website-control", icon: Globe }, { title: "Media Library", path: "/media-library", icon: Images }],
 };
 
 const Sidebar = ({ onClose }: SidebarProps) => {
