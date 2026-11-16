@@ -30,6 +30,7 @@ export const permissionForPath = (pathname: string): PageKey | "people" | null =
   if (pathname === "/") return "dashboard";
   if (pathname === "/custom-size-requests" || pathname.startsWith("/custom-size-requests/")) return "orders";
   if (pathname === "/categories" || pathname.startsWith("/categories/")) return "website-control";
+  if (pathname === "/media-library" || pathname.startsWith("/media-library/")) return "website-control";
   if (pathname === "/refunds" || pathname.startsWith("/refunds/")) return "payments";
   if (pathname === "/people" || pathname.startsWith("/people/") || pathname === "/hr-leave") return "people";
 

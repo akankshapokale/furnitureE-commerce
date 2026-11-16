@@ -25,6 +25,7 @@ import { AuthProvider } from "./context/AuthContext";
 import WebsiteControl from "./pages/WebsiteControl";
 import OffersPromotions from "./pages/OfferPromotions";
 import CustomSizeRequests from "./pages/CustomSizeRequests";
+import MediaLibrary from "./pages/MediaLibrary";
 
 
 function AppRoutes() {
@@ -62,6 +63,7 @@ function AppRoutes() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/orders/:id" element={<OrderDetails />} />
             <Route path="/website-control" element={<WebsiteControl />} />
+            <Route path="/media-library" element={<MediaLibrary />} />
             <Route path="/offers-promotions" element={<OffersPromotions />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

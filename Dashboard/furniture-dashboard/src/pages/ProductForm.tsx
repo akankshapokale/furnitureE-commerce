@@ -369,6 +369,7 @@ const ProductForm = ({ drawer = false }: { drawer?: boolean }) => {
       if (!response.ok) throw new Error(data.message || "Upload failed");
       const image = {
         image_url: data.url,
+        public_id: data.public_id ?? data.data?.public_id,
         alt_text: isDimensionsImage ? "Product Dimensions" : form.name || file.name,
         is_primary: !isDimensionsImage && (uploadTarget === "primary" || form.images.length === 0),
       };

@@ -343,6 +343,34 @@ export const updateSubCategory = (id: number, data: Partial<SubCategory>) =>
   api.put(`/sub-categories/${id}`, data);
 export const deleteSubCategory = (id: number) => api.delete(`/sub-categories/${id}`);
 
+// ==================== CLOUDINARY MEDIA LIBRARY ====================
+// These endpoints are served by the companion API. Existing product/review upload
+// endpoints remain unchanged for compatibility with older backend deployments.
+export interface MediaAsset {
+  url: string;
+  public_id: string;
+  resource_type?: string;
+  format?: string;
+  bytes?: number;
+  width?: number;
+  height?: number;
+  created_at?: string;
+  folder?: string;
+  tags?: string[];
+}
+
+export const getMediaAssets = (params: { search?: string; category?: string } = {}) =>
+  api.get<{ data: MediaAsset[] }>("/media", { params });
+export const deleteMediaAsset = (publicId: string) =>
+  api.delete(`/media/${encodeURIComponent(publicId)}`);
+export const replaceMediaAsset = (publicId: string, file: File) => {
+  const body = new FormData();
+  body.append("image", file);
+  return api.post<{ data: MediaAsset }>(`/media/${encodeURIComponent(publicId)}/replace`, body, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
+
 // ==================== USERS ====================
 
 export const getUsers = () => {

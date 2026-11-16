@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "media:migrate": "node scripts/migrate-media.mjs",
+    "media:verify": "node scripts/verify-media.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

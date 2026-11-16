@@ -771,7 +771,6 @@ const Orders = () => {
         const customerName = selectedOrder.customer_name || selectedOrder.customer || (selectedOrder.user_id ? `User #${selectedOrder.user_id}` : "Customer");
         const shipment = shipmentDetails[String(selectedOrder.id)];
         const activeShipmentStage = normalizeShipmentStage(shipmentStatuses[String(selectedOrder.id)] || shipment?.shipment_status || selectedOrder.shipment_status || selectedOrder.shipmentStatus || selectedOrder.status);
-        const activeShipmentStageIndex = SHIPMENT_STAGES.findIndex((stage) => stage.value === activeShipmentStage);
         const address = [selectedOrder.address_line1, selectedOrder.address_line2, selectedOrder.shipping_city, selectedOrder.shipping_state, selectedOrder.shipping_postal_code, selectedOrder.shipping_country]
           .filter(Boolean).join(", ");
         const orderDate = formatOrderDateTime(selectedOrder.created_at, "—", selectedOrder.order_number);
@@ -887,13 +886,6 @@ const Orders = () => {
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Shipment Tracking</h3>
                     <span className={`inline-flex px-2.5 py-1 text-xs font-semibold ${statusStyles[activeShipmentStage] || "bg-gray-100 text-slate-700"}`}>{shipmentStageLabel(activeShipmentStage)}</span>
-                  </div>
-                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {SHIPMENT_STAGES.map((stage, index) => (
-                      <div key={stage.value} className={`border px-2.5 py-2 text-xs ${index <= activeShipmentStageIndex ? "border-green-200 bg-green-50 text-green-800" : "border-gray-200 bg-gray-50 text-slate-400"}`}>
-                        <span className="mr-1 font-bold">{index < activeShipmentStageIndex ? "✓" : index + 1}</span>{stage.label}
-                      </div>
-                    ))}
                   </div>
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                     <select value={shipmentStageDraft} onChange={(event) => setShipmentStageDraft(event.target.value as ShipmentStage)} disabled={!shipment?.id || savingShipmentStage} className="h-10 min-w-0 flex-1 border border-gray-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-green-600 disabled:bg-gray-50">

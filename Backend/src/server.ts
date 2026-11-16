@@ -143,6 +143,35 @@ const startServer = async () => {
   }
   try {
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS product_reviews (
+        id SERIAL PRIMARY KEY,
+        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        reviewer_name VARCHAR(120) NOT NULL,
+        rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+        title VARCHAR(160),
+        comment TEXT,
+        image_url TEXT,
+        image_urls JSONB NOT NULL DEFAULT '[]'::jsonb,
+        is_verified_purchase BOOLEAN NOT NULL DEFAULT FALSE,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'hidden')),
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await pool.query("ALTER TABLE product_reviews ADD COLUMN IF NOT EXISTS image_url TEXT");
+    await pool.query("ALTER TABLE product_reviews ADD COLUMN IF NOT EXISTS image_urls JSONB NOT NULL DEFAULT '[]'::jsonb");
+    await pool.query(`
+      UPDATE product_reviews
+      SET image_urls = jsonb_build_array(image_url)
+      WHERE image_url IS NOT NULL AND image_url <> '' AND image_urls = '[]'::jsonb
+    `);
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_product_reviews_product ON product_reviews (product_id, status)");
+  } catch (error) {
+    console.warn("Warning: Product review schema setup skipped:", (error as Error).message);
+  }
+  try {
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS custom_size_requests (
         id BIGSERIAL PRIMARY KEY,
         request_id TEXT NOT NULL UNIQUE,
