@@ -1228,7 +1228,7 @@ const CategoryDetail = () => {
                 {activeSubcategory !== "all" ? subcategoryName : currentCategory.name}
               </h1>
               <p className="subcat-desc">
-                Browse premium {(activeSubcategory !== "all" ? subcategoryName : currentCategory.name).toLowerCase()} crafted for superior comfort{currentCategory.id === "cupboards-almirahs" ? "." : " and durability."}
+                Browse premium {(activeSubcategory !== "all" ? subcategoryName : currentCategory.name).toLowerCase()} crafted for superior comfort and durability.
               </p>
             </div>
 
